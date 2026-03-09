@@ -349,30 +349,43 @@
     // (which hides the sender label) is only applied when the same person
     // sends multiple messages in a row, and NOT when there's a replyTo block.
     function recalcContinuations(elements) {
-        // Called after sorting historical message batches.
-        // For each run of messages from the same sender, the 2nd+ messages are
-        // "continuations": we clear their username area and remove the timestamp
-        // so only the first in a run shows who sent it.
+        // Groups consecutive messages from the same sender as "continuations"
+        // (username hidden on 2nd+ messages in a run).
+        // Rules that BREAK a group and force the username to show again:
+        //   1. Different sender
+        //   2. A system message (join/leave) in between
+        //   3. A reply quote (needs sender context)
+        //   4. Time gap > 5 minutes between consecutive messages
+        const GAP_MS = 5 * 60 * 1000; // 5 minutes
         let prevSender = null;
+        let prevTs     = null;
         elements.forEach(el => {
-            if (el.classList.contains('system-message')) { prevSender = null; return; }
+            if (el.classList.contains('system-message')) {
+                prevSender = null; prevTs = null; return;
+            }
             const sEl = el.querySelector('.message-sender');
-            // Replies always break the continuation — we need the sender header visible
             const hasReply = el.querySelector('.reply-quote');
             if (!sEl) return;
-            const sender = sEl.getAttribute('data-sender');
-            if (prevSender === sender && !hasReply) {
+
+            const sender  = sEl.getAttribute('data-sender');
+            const tsRaw   = el.getAttribute('data-ts');
+            const ts      = tsRaw ? parseInt(tsRaw, 10) : null;
+
+            // Check if this message continues the previous run
+            const sameUser  = prevSender === sender;
+            const smallGap  = (ts && prevTs) ? (ts - prevTs) < GAP_MS : true;
+            const isCont    = sameUser && smallGap && !hasReply;
+
+            if (isCont) {
                 el.classList.add('continued-message');
-                // FIX: was looking for .message-info which does not exist.
-                // The correct element is .username-area — clear its HTML so the
-                // 11ch column stays but the name and tilde disappear.
                 const ua = el.querySelector('.username-area');
                 if (ua) ua.innerHTML = '';
-
             } else {
                 el.classList.remove('continued-message');
             }
+
             prevSender = sender;
+            prevTs     = ts || prevTs;
         });
     }
 
@@ -475,6 +488,8 @@
                                   isContinuation = false, color, image = null, replyTo = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message';
+        // Store raw timestamp so recalcContinuations can detect time gaps
+        if (timestamp) messageDiv.setAttribute('data-ts', new Date(timestamp).getTime());
 
         // ── Username area ────────────────────────────────────────────────
         const usernameArea = document.createElement('div');
