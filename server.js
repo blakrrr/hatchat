@@ -244,6 +244,12 @@ const userColors = {};
 let users = {};
 const voiceMembers = {};  // socketId -> { username }
 
+// Grace-period disconnect map: username -> setTimeout handle
+// When a user disconnects we don't immediately announce "X has left".
+// If they reconnect within 4 seconds (page navigation) we cancel the timer
+// and suppress both the leave AND join system messages silently.
+const disconnectTimers = {};
+
 const MESSAGES_FILE = path.join(__dirname, 'chat_messages.json');
 const USER_COLORS_FILE = path.join(__dirname, 'user_colors.json');
 
@@ -289,9 +295,19 @@ io.on('connection', (socket) => {
     console.log(`User connected: ${username} (${socket.id})`);
 
     socket.on('user_join', (data) => {
-        io.emit('user_join', { username: data.username, users: Object.values(users), userColors });
-        chatMessages.push({ type: 'system', message: `${data.username} has joined the chat`, timestamp: new Date().toISOString() });
-        saveMessages();
+        if (disconnectTimers[data.username]) {
+            // User navigated between pages and reconnected quickly.
+            // Cancel the pending "left" announcement and skip the "joined" one too.
+            clearTimeout(disconnectTimers[data.username]);
+            delete disconnectTimers[data.username];
+            // Still refresh the user list so their dot shows up
+            io.emit('update_users', { users: Object.values(users), userColors });
+        } else {
+            // Genuine fresh join — announce normally
+            io.emit('user_join', { username: data.username, users: Object.values(users), userColors });
+            chatMessages.push({ type: 'system', message: `${data.username} has joined the chat`, timestamp: new Date().toISOString() });
+            saveMessages();
+        }
     });
 
     socket.on('chat_message', (data) => {
@@ -365,15 +381,27 @@ io.on('connection', (socket) => {
         onlineUsers.delete(username);
         delete users[socket.id];
         console.log(`User disconnected: ${username}`);
-        chatMessages.push({ type: 'system', message: `${username} has left the chat`, timestamp: new Date().toISOString() });
-        saveMessages();
-        io.emit('user_leave', { username, users: Object.values(users), userColors });
+
+        // Snapshot the socket id so the timer closure uses the right value
+        const snapSocketId = socket.id;
+
+        // Wait 4 seconds before announcing "has left". If the user reconnects
+        // before the timer fires (e.g. they clicked a nav link), user_join will
+        // cancel this timer and no messages are shown.
+        disconnectTimers[username] = setTimeout(() => {
+            delete disconnectTimers[username];
+            chatMessages.push({ type: 'system', message: `${username} has left the chat`, timestamp: new Date().toISOString() });
+            saveMessages();
+            io.emit('user_leave', { username, users: Object.values(users), userColors });
+            io.emit('update_users', { users: Object.values(users) });
+            if (voiceMembers[snapSocketId]) {
+                delete voiceMembers[snapSocketId];
+                io.emit('voice_user_left', { socketId: snapSocketId });
+            }
+        }, 4000);
+
+        // Update the user list immediately so their dot disappears right away
         io.emit('update_users', { users: Object.values(users) });
-        // Clean up voice if they were in it
-        if (voiceMembers[socket.id]) {
-            delete voiceMembers[socket.id];
-            io.emit('voice_user_left', { socketId: socket.id });
-        }
     });
 });
 
