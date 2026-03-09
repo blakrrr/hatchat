@@ -368,10 +368,7 @@
                 // 11ch column stays but the name and tilde disappear.
                 const ua = el.querySelector('.username-area');
                 if (ua) ua.innerHTML = '';
-                // Also remove the timestamp span — it was only added because all
-                // historical messages are initially created with isContinuation=false.
-                const ts = el.querySelector('.timestamp');
-                if (ts) ts.remove();
+
             } else {
                 el.classList.remove('continued-message');
             }
@@ -535,15 +532,7 @@
             messageContent.appendChild(quote);
         }
 
-        // ── Timestamp ────────────────────────────────────────────────────
-        // Always added to messageDiv (not messageContent) so it never
-        // pushes message text around. Shown only on hover via CSS opacity.
-        if (timestamp) {
-            const ts = document.createElement('span');
-            ts.className   = 'timestamp';
-            ts.textContent = formatTimestamp(timestamp);
-            messageDiv.appendChild(ts);   // goes on the outer div, not inside content
-        }
+        // timestamps removed
 
         // Text
         if (message && message.length > 0) {
@@ -594,12 +583,7 @@
         const div = document.createElement('div');
         div.className   = 'system-message';
         div.textContent = message;
-        if (timestamp) {
-            const ts = document.createElement('span');
-            ts.className   = 'timestamp';
-            ts.textContent = formatTimestamp(timestamp);
-            div.appendChild(ts);
-        }
+        // timestamps removed
         return div;
     }
 
