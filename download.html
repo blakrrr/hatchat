@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hatchat - Download</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d0d0d">
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+    <style>
+        body.download-page { height: auto; min-height: 100vh; }
+        .dl-main {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 2.5rem 2rem;
+        }
+        .dl-main h1 {
+            font-size: 1.4rem;
+            margin-bottom: 0.3rem;
+        }
+        .dl-subtitle {
+            color: #666;
+            font-size: 0.85rem;
+            margin-bottom: 2.5rem;
+        }
+        .dl-card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .dl-card h2 {
+            font-size: 1rem;
+            margin: 0 0 0.4rem;
+            color: #e0e0e0;
+        }
+        .dl-card p {
+            font-size: 0.82rem;
+            color: #888;
+            margin: 0 0 1.2rem;
+            line-height: 1.6;
+        }
+        .dl-btn {
+            display: inline-block;
+            padding: 0.65rem 1.4rem;
+            background: #333;
+            color: #e0e0e0;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-family: DejaVu Sans Mono, monospace;
+            transition: background 0.15s;
+            text-decoration: none;
+        }
+        .dl-btn:hover  { background: #444; }
+        .dl-btn.primary {
+            background: #2e5e2e;
+            border-color: #4a8a4a;
+            color: #9fd49f;
+        }
+        .dl-btn.primary:hover { background: #3a7a3a; }
+        .dl-btn:disabled, .dl-btn.hidden { display: none; }
+
+        #install-status {
+            font-size: 0.8rem;
+            margin-top: 0.8rem;
+            color: #666;
+        }
+        #install-status.success { color: #6fcf6f; }
+        #install-status.error   { color: #cf6f6f; }
+
+        .dl-steps {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            counter-reset: step;
+        }
+        .dl-steps li {
+            counter-increment: step;
+            font-size: 0.82rem;
+            color: #aaa;
+            padding: 0.4rem 0 0.4rem 2rem;
+            position: relative;
+            line-height: 1.5;
+        }
+        .dl-steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 0.4rem;
+            width: 1.2rem;
+            height: 1.2rem;
+            background: #2a2a2a;
+            border-radius: 50%;
+            font-size: 0.72rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #777;
+        }
+        .dl-steps li strong { color: #ccc; }
+
+        .dl-tabs {
+            display: flex;
+            gap: 0.4rem;
+            margin-bottom: 1.2rem;
+        }
+        .dl-tab {
+            padding: 0.3rem 0.75rem;
+            font-size: 0.78rem;
+            font-family: DejaVu Sans Mono, monospace;
+            background: transparent;
+            border: 1px solid #333;
+            color: #666;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .dl-tab:hover  { color: #aaa; border-color: #555; }
+        .dl-tab.active { color: #e0e0e0; border-color: #777; background: #1e1e1e; }
+
+        .dl-tab-content { display: none; }
+        .dl-tab-content.active { display: block; }
+
+        .dl-note {
+            font-size: 0.75rem;
+            color: #555;
+            margin-top: 1rem;
+            line-height: 1.5;
+        }
+        .dl-note a { color: #7c6af7; text-decoration: none; }
+        .dl-note a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body class="download-page">
+    <header>
+        <div class="logo">hatchat - 1.0.0.7</div>
+        <nav><ul>
+            <li><a href="clips.html">clips</a></li>
+            <li><a href="index.html">homepage</a></li>
+            <li><a href="chat.html">hatchat</a></li>
+            <li><a href="settings.html">settings</a></li>
+            <li><a href="download.html">download</a></li>
+        </ul></nav>
+    </header>
+
+    <div class="dl-main">
+        <h1>get hatchat on your desktop</h1>
+        <p class="dl-subtitle">installs as a standalone app — no store, no installer, no bs</p>
+
+        <!-- Auto-prompt card: shown when browser fires beforeinstallprompt -->
+        <div class="dl-card" id="card-auto">
+            <h2>install app</h2>
+            <p>your browser detected hatchat can be installed as a desktop app. click the button and follow the prompt.</p>
+            <button class="dl-btn primary" id="install-btn">install hatchat</button>
+            <div id="install-status"></div>
+        </div>
+
+        <!-- Already installed or prompt not available -->
+        <div class="dl-card" id="card-manual">
+            <h2>manual install</h2>
+            <p>if the button above didn't appear, use your browser's built-in install option below.</p>
+
+            <div class="dl-tabs">
+                <button class="dl-tab active" onclick="showTab('chrome')">chrome / edge</button>
+                <button class="dl-tab" onclick="showTab('firefox')">firefox</button>
+                <button class="dl-tab" onclick="showTab('safari')">safari</button>
+            </div>
+
+            <div id="tab-chrome" class="dl-tab-content active">
+                <ol class="dl-steps">
+                    <li>open <a href="https://hatchat.blakrr.works" target="_blank" class="dl-note">hatchat.blakrr.works</a> in Chrome or Edge</li>
+                    <li>click the <strong>⊕</strong> or <strong>install</strong> icon in the address bar (right side)</li>
+                    <li>click <strong>install</strong> in the popup — done</li>
+                </ol>
+                <p class="dl-note">no icon? try: ⋮ menu → <strong>cast, save, and share</strong> → <strong>install page as app</strong></p>
+            </div>
+
+            <div id="tab-firefox" class="dl-tab-content">
+                <ol class="dl-steps">
+                    <li>PWA install is limited in Firefox desktop — use Chrome or Edge for the best experience</li>
+                    <li>alternatively, bookmark this site and open it in a new window: ☰ → <strong>more tools</strong> → <strong>open in new window</strong></li>
+                </ol>
+            </div>
+
+            <div id="tab-safari" class="dl-tab-content">
+                <ol class="dl-steps">
+                    <li>open hatchat in Safari on your iPhone or Mac</li>
+                    <li>tap the <strong>share</strong> button (box with arrow)</li>
+                    <li>scroll down and tap <strong>add to home screen</strong></li>
+                    <li>tap <strong>add</strong> — hatchat appears on your home screen</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="dl-note" style="text-align:center">
+            runs entirely in your browser — no separate download needed.<br>
+            data stays synced through the server at <a href="https://averrgy-github-io.onrender.com" target="_blank">averrgy-github-io.onrender.com</a>
+        </div>
+    </div>
+
+<script>
+    let deferredPrompt = null;
+    const installBtn   = document.getElementById('install-btn');
+    const installStatus = document.getElementById('install-status');
+    const cardAuto     = document.getElementById('card-auto');
+
+    // Hide the auto-install card by default; show it only if the prompt fires
+    cardAuto.style.display = 'none';
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        cardAuto.style.display = '';   // reveal the card
+        installStatus.textContent = 'ready to install';
+    });
+
+    installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) {
+            installStatus.textContent = 'prompt expired — use the manual steps below';
+            installStatus.className = 'error';
+            return;
+        }
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (outcome === 'accepted') {
+            installStatus.textContent = '✓ installed!';
+            installStatus.className = 'success';
+            installBtn.textContent  = '✓ installed';
+            installBtn.disabled = true;
+        } else {
+            installStatus.textContent = 'cancelled — you can try again or use the manual steps below';
+            installStatus.className = 'error';
+        }
+    });
+
+    window.addEventListener('appinstalled', () => {
+        installStatus.textContent = '✓ hatchat is installed';
+        installStatus.className = 'success';
+        deferredPrompt = null;
+    });
+
+    function showTab(name) {
+        document.querySelectorAll('.dl-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.dl-tab').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // Register SW here too so visiting /download.html also qualifies
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+</script>
+</body>
+</html>

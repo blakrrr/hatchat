@@ -2,13 +2,14 @@
 // Caches the app shell so it loads instantly and works offline.
 // Strategy: cache-first for static assets, network-first for API calls.
 
-const CACHE = 'hatchat-v1';
+const CACHE = 'hatchat-v2';
 const SHELL = [
   '/',
   '/chat.html',
   '/clips.html',
   '/index.html',
   '/settings.html',
+  '/download.html',
   '/style.css',
   '/manifest.json',
   '/public/icons/icon-192.png',
