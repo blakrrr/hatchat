@@ -51,7 +51,7 @@
         <!-- Upload -->
         <div class="clips-upload-section" id="drop-zone">
             <h2>upload a clip</h2>
-            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB &nbsp;|&nbsp; last 60s kept &nbsp;|&nbsp; drag & drop or browse</p>
+            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; no size limit &nbsp;|&nbsp; last 60s kept &nbsp;|&nbsp; drag & drop or browse</p>
             <label class="clip-upload-label" for="clip-file-input">choose files</label>
             <input type="file" id="clip-file-input" class="clip-file-input"
                    accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
@@ -303,17 +303,18 @@
     // ── File selection ───────────────────────────────────────
     fileInput.addEventListener('change', () => selectFiles([...fileInput.files]));
     function selectFiles(files) {
-        const MAX=50*1024*1024, NVIDIA=/\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
+        const NVIDIA=/\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
         const allowed=[], rejected=[];
         files.forEach(f => {
-            if (!NVIDIA.test(f.name))  rejected.push(`${f.name} — not NVIDIA clip`);
-            else if (f.size > MAX)     rejected.push(`${f.name} — over 50 MB`);
-            else                       allowed.push(f);
+            if (!NVIDIA.test(f.name)) rejected.push(`${f.name} — not NVIDIA clip`);
+            else                      allowed.push(f);
         });
         if (rejected.length) showStatus('Rejected: '+rejected.join(' | '),'error');
         selectedFiles = allowed;
+        const totalMB = (allowed.reduce((s,f)=>s+f.size,0)/1024/1024).toFixed(1);
         selectedName.textContent = allowed.length===0 ? 'no files selected'
-            : allowed.length===1 ? allowed[0].name : `${allowed.length} files selected`;
+            : allowed.length===1 ? `${allowed[0].name} (${(allowed[0].size/1024/1024).toFixed(1)} MB)`
+            : `${allowed.length} files selected — ${totalMB} MB total`;
         submitBtn.disabled = allowed.length===0;
     }
 
@@ -357,7 +358,7 @@
             showStatus('Network error — try again.','error');
         });
         xhr.open('POST',`${SERVER}/upload-clip`);
-        xhr.timeout=10*60*1000;
+        xhr.timeout = 60 * 60 * 1000; // 60 minutes for large batches
         xhr.send(formData);
     });
 

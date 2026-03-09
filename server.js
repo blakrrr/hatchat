@@ -67,15 +67,14 @@ app.post('/upload', imageUpload.single('image'), (req, res) => {
 
 // NVIDIA filename pattern: "Game Name YYYY.MM.DD - HH.MM.SS.frames.ext"
 const NVIDIA_PATTERN = /\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
-const MAX_CLIP_MB    = 50;
-const MAX_CLIP_BYTES = MAX_CLIP_MB * 1024 * 1024;
 
+// No size limit on multer — Cloudinary accepts any size and we compress on their end.
+// We buffer each file in memory one at a time via the streaming uploader.
 const clipMemStorage = multer.memoryStorage();
 
 const clipUploadMW = multer({
     storage: clipMemStorage,
     fileFilter: (req, file, cb) => {
-        // Reject non-NVIDIA filenames immediately
         if (!NVIDIA_PATTERN.test(file.originalname)) {
             return cb(new Error('Only NVIDIA GameDVR clips (with date in filename) are allowed.'), false);
         }
@@ -83,12 +82,19 @@ const clipUploadMW = multer({
         const extOk  = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.originalname);
         (mimeOk || extOk) ? cb(null, true) : cb(new Error('Only video files allowed'), false);
     },
-    limits: { fileSize: MAX_CLIP_BYTES }
+    // No fileSize limit — let Cloudinary handle oversized files
+    limits: { files: 200 }
 });
 
-// POST /upload-clip — supports multiple files (field name "clips[]")
+// POST /upload-clip — supports large batches (up to 200 files)
+// Files are streamed from disk (temp) to Cloudinary one at a time to avoid
+// blowing Render's 512MB RAM limit when doing 89+ file batch uploads.
 app.post('/upload-clip', (req, res) => {
-    clipUploadMW.array('clips', 20)(req, res, async (err) => {
+    // Set a generous timeout for large batches — 30 minutes
+    req.setTimeout(30 * 60 * 1000);
+    res.setTimeout(30 * 60 * 1000);
+
+    clipUploadMW.array('clips', 200)(req, res, async (err) => {
         if (err) return res.status(400).json({ success: false, message: err.message });
         const files = req.files;
         if (!files || files.length === 0) return res.status(400).json({ success: false, message: 'No files uploaded' });
@@ -108,15 +114,18 @@ app.post('/upload-clip', (req, res) => {
                                 folder: 'hatchat-clips',
                                 public_id: baseName,
                                 overwrite: false,
-                                // Trim to 30 seconds, compress to ~50 MB quality
-                                eager: [{
-                                    // Trim to last 30 seconds: start_offset counts from end
-                                    start_offset: '-30',
-                                    quality: 'auto:low',
-                                    fetch_format: 'mp4',
-                                    bit_rate: '1m',
-                                }],
-                                eager_async: true,
+                                // Apply transformation at ingest time — the stored file
+                                // IS the trimmed+compressed version. No async, no separate URL.
+                                // start_offset: '-30' = keep only the last 30 seconds.
+                                // bit_rate: '1m' = ~7.5 MB/min → a 30s clip ≈ 3.75 MB max.
+                                transformation: [
+                                    {
+                                        start_offset: '-30',
+                                        bit_rate:     '1m',
+                                        quality:      'auto:low',
+                                        fetch_format: 'mp4',
+                                    }
+                                ],
                                 tags: [`uploader:${uploader}`],
                                 context: `uploader=${uploader}`,
                             },
@@ -130,8 +139,11 @@ app.post('/upload-clip', (req, res) => {
                         public_id: uploadResult.public_id,
                         uploader,
                     });
+                    // Free the buffer immediately after upload to keep RAM low
+                    file.buffer = null;
                 } catch (e) {
                     errors.push({ filename: file.originalname, message: e.message });
+                    file.buffer = null;
                 }
             }
 
@@ -210,7 +222,6 @@ app.get('/api/clips', async (req, res) => {
             tags: true,
         });
         const clips = result.resources.map(r => {
-            // Extract uploader from context or tags
             let uploader = 'unknown';
             if (r.context && r.context.custom && r.context.custom.uploader) {
                 uploader = r.context.custom.uploader;
@@ -218,9 +229,12 @@ app.get('/api/clips', async (req, res) => {
                 const tag = r.tags.find(t => t.startsWith('uploader:'));
                 if (tag) uploader = tag.replace('uploader:', '');
             }
+            // Use the Cloudinary URL directly — ingest transformation already
+            // stored the compressed+trimmed version as the canonical file.
             return {
-                filename: path.basename(r.public_id) + '.' + r.format,
-                url: r.secure_url,
+                filename:   path.basename(r.public_id) + '.' + r.format,
+                url:        r.secure_url,
+                public_id:  r.public_id,
                 created_at: r.created_at,
                 uploader,
             };
