@@ -120,13 +120,15 @@ nav a:hover {
 .chat-messages::-webkit-scrollbar { display: none; }
 
 .message {
-    position: relative;        /* needed so reply btn positions correctly */
+    position: relative;
     margin-bottom: 0.5rem;
-    padding: 0.3rem 2.5rem 0.3rem 0; /* right pad leaves space for reply btn */
+    padding: 0.3rem 2.5rem 0.3rem 0;
     max-width: 100%;
     word-wrap: break-word;
     display: flex;
-    white-space: nowrap;
+    /* removed white-space: nowrap — flex handles row layout, this was
+       jamming timestamps against message text and breaking block children */
+    align-items: flex-start;
 }
 
 .message-info {
@@ -148,16 +150,33 @@ nav a:hover {
 .message-separator { margin: 0; white-space: pre; }
 
 .message-content {
-    display: inline;
+    /* was display:inline — block children (reply-quote div) were invisible inside it.
+       flex context makes flex items block-level anyway, so this change is safe. */
+    display: block;
     word-break: break-word;
     white-space: normal;
     flex: 1;
     padding-left: 0.5rem;
+    min-width: 0; /* prevents flex item overflow */
 }
 
 .continued-message { margin-top: 0.2rem; padding-top: 0; }
 
-.timestamp { font-size: 0.7rem; color: #777; margin-left: 0.5rem; }
+/* Timestamp — hidden by default, fades in when you hover the message row.
+   Positioned absolutely so it never pushes message text around. */
+.timestamp {
+    position: absolute;
+    right: 34px; /* leave room for reply button */
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.68rem;
+    color: #555;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.message:hover .timestamp { opacity: 1; }
 
 .system-message {
     text-align: center;
@@ -195,26 +214,52 @@ nav a:hover {
     border-color: #666;
 }
 
-/* ── Reply Quote Block (inside a replied message) ────────────── */
+/* ── Reply Quote Block ──────────────────────────────────────────
+   The "inverted C" / bracket shape connecting the quoted message
+   to the reply below it.
+
+   Visual result:
+     ╭── ave: original text here...
+     │
+     reply text here
+
+   --reply-color is set per-element by JS to match the quoted sender.
+   The ::before draws the short vertical tail from the bracket corner
+   down to the reply text, completing the bracket shape.
+────────────────────────────────────────────────────────────── */
 .reply-quote {
     display: block;
-    border-left: 3px solid #555;
-    padding: 3px 8px;
-    margin-bottom: 5px;
-    background-color: rgba(255, 255, 255, 0.04);
-    border-radius: 0 4px 4px 0;
+    position: relative;
+    border-left: 2px solid var(--reply-color, #666);
+    border-top:  2px solid var(--reply-color, #666);
+    border-radius: 0 6px 0 0;    /* rounds the top-right corner = the ╭ curve */
+    padding: 4px 8px 4px 8px;
+    margin-bottom: 8px;
+    background-color: rgba(255, 255, 255, 0.03);
     font-size: 0.82em;
-    opacity: 0.8;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 500px;
+    max-width: 600px;
     cursor: pointer;
+    transition: background 0.12s;
 }
 
-.reply-quote:hover { opacity: 1; background-color: rgba(255,255,255,0.08); }
+/* Vertical tail — extends the left border downward to connect to reply text */
+.reply-quote::after {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 100%;
+    width: 2px;
+    height: 7px;
+    background: var(--reply-color, #666);
+    opacity: 0.6;
+}
+
+.reply-quote:hover { background-color: rgba(255,255,255,0.07); }
 .reply-quote-author { font-weight: bold; }
-.reply-quote-text   { color: #ccc; }
+.reply-quote-text   { color: #bbb; }
 
 /* ── Reply Preview Bar (above the input) ─────────────────────── */
 .reply-preview {
