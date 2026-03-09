@@ -354,14 +354,7 @@
     // (which hides the sender label) is only applied when the same person
     // sends multiple messages in a row, and NOT when there's a replyTo block.
     function recalcContinuations(elements) {
-        // Groups consecutive messages from the same sender as "continuations"
-        // (username hidden on 2nd+ messages in a run).
-        // Rules that BREAK a group and force the username to show again:
-        //   1. Different sender
-        //   2. A system message (join/leave) in between
-        //   3. A reply quote (needs sender context)
-        //   4. Time gap > 5 minutes between consecutive messages
-        const GAP_MS = 5 * 60 * 1000; // 5 minutes
+        const GAP_MS = 5 * 60 * 1000;
         let prevSender = null;
         let prevTs     = null;
         elements.forEach(el => {
@@ -369,21 +362,19 @@
                 prevSender = null; prevTs = null; return;
             }
             const sEl = el.querySelector('.message-sender');
-            const hasReply = el.querySelector('.reply-quote');
             if (!sEl) return;
 
-            const sender  = sEl.getAttribute('data-sender');
-            const tsRaw   = el.getAttribute('data-ts');
-            const ts      = tsRaw ? parseInt(tsRaw, 10) : null;
+            const sender   = sEl.getAttribute('data-sender');
+            const hasReply = !!el.querySelector('.reply-wrapper');
+            const tsRaw    = el.getAttribute('data-ts');
+            const ts       = tsRaw ? parseInt(tsRaw, 10) : null;
 
-            // Check if this message continues the previous run
-            const sameUser  = prevSender === sender;
-            const smallGap  = (ts && prevTs) ? (ts - prevTs) < GAP_MS : true;
-            const isCont    = sameUser && smallGap && !hasReply;
+            const sameUser = prevSender === sender;
+            const smallGap = (ts && prevTs) ? (ts - prevTs) < GAP_MS : true;
+            const isCont   = sameUser && smallGap && !hasReply;
 
             if (isCont) {
                 el.classList.add('continued-message');
-                // CSS hides .username-area for .continued-message — no need to wipe innerHTML
             } else {
                 el.classList.remove('continued-message');
             }
@@ -496,27 +487,29 @@
         // Store raw timestamp so recalcContinuations can detect time gaps
         if (timestamp) messageDiv.setAttribute('data-ts', new Date(timestamp).getTime());
 
-        // ── Username area ────────────────────────────────────────────────
+        // ── Username area ─────────────────────────────────────────────────
+        // IMPORTANT: We ALWAYS create the sender element so recalcContinuations
+        // can find data-sender on every message. CSS handles visibility via
+        // .continued-message .username-area { display: none }.
         const usernameArea = document.createElement('div');
         usernameArea.className = 'username-area';
 
-        if (!isContinuation) {
-            const senderEl = document.createElement('span');
-            senderEl.className = 'message-sender';
-            senderEl.setAttribute('data-sender', sender);
-            senderEl.textContent = sender;
-            if (color)              senderEl.style.color = color;
-            else if (userColors[sender]) senderEl.style.color = userColors[sender];
+        const senderEl = document.createElement('span');
+        senderEl.className = 'message-sender';
+        senderEl.setAttribute('data-sender', sender);
+        senderEl.textContent = sender;
+        if (color)                   senderEl.style.color = color;
+        else if (userColors[sender]) senderEl.style.color = userColors[sender];
 
-            const sep = document.createElement('span');
-            sep.className   = 'message-separator';
-            sep.textContent = ' ~ ';
+        const sep = document.createElement('span');
+        sep.className   = 'message-separator';
+        sep.textContent = ' ~ ';
 
-            usernameArea.appendChild(senderEl);
-            usernameArea.appendChild(sep);
-        }
-
+        usernameArea.appendChild(senderEl);
+        usernameArea.appendChild(sep);
         messageDiv.appendChild(usernameArea);
+
+        if (isContinuation) messageDiv.classList.add('continued-message');
 
         // ── Message content ──────────────────────────────────────────────
         const messageContent = document.createElement('div');
@@ -645,7 +638,7 @@
 
     // ── Display a new incoming message ────────────────────────────────────
     function displayMessage(sender, message, timestamp, color, image = null, replyTo = null) {
-        // A reply always breaks a continuation run so the sender name is shown
+        // A reply always shows the sender name; system messages reset the run
         const isContinuation = !replyTo && (sender === lastMessageSender);
         const el = createMessageElement(sender, message, timestamp,
                                         isContinuation, color, image, replyTo);
