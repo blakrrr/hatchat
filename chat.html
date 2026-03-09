@@ -506,24 +506,28 @@
         messageContent.className = 'message-content';
 
         // ── Reply quote block ────────────────────────────────────────────
-        // If this message was a reply, show a small quote of the original above it.
+        // The bracket shape (╭── author: text) is drawn entirely in CSS
+        // using border-left + border-top + border-radius on .reply-quote.
+        // --reply-color drives both the border and the ::after tail so
+        // the bracket takes on the quoted sender's color.
         if (replyTo) {
+            const quoteColor = replyTo.color || userColors[replyTo.username] || '#666';
             const quote = document.createElement('div');
             quote.className = 'reply-quote';
+            // CSS var makes the bracket color match the quoted sender
+            quote.style.setProperty('--reply-color', quoteColor);
 
             const qAuthor = document.createElement('span');
             qAuthor.className   = 'reply-quote-author';
             qAuthor.textContent = replyTo.username;
-            if (replyTo.color) qAuthor.style.color = replyTo.color;
-            else if (userColors[replyTo.username]) qAuthor.style.color = userColors[replyTo.username];
+            qAuthor.style.color = quoteColor;
 
             const qSep  = document.createTextNode(': ');
 
             const qText = document.createElement('span');
             qText.className   = 'reply-quote-text';
-            // Truncate long quoted text so it doesn't dominate the layout
             const raw = replyTo.message || '[image]';
-            qText.textContent = raw.length > 120 ? raw.substring(0, 120) + '…' : raw;
+            qText.textContent = raw.length > 100 ? raw.substring(0, 100) + '…' : raw;
 
             quote.appendChild(qAuthor);
             quote.appendChild(qSep);
@@ -531,12 +535,14 @@
             messageContent.appendChild(quote);
         }
 
-        // Timestamp (only on first message of a group, and only for text messages)
-        if (!isContinuation && timestamp && !image) {
+        // ── Timestamp ────────────────────────────────────────────────────
+        // Always added to messageDiv (not messageContent) so it never
+        // pushes message text around. Shown only on hover via CSS opacity.
+        if (timestamp) {
             const ts = document.createElement('span');
             ts.className   = 'timestamp';
             ts.textContent = formatTimestamp(timestamp);
-            messageContent.appendChild(ts);
+            messageDiv.appendChild(ts);   // goes on the outer div, not inside content
         }
 
         // Text
