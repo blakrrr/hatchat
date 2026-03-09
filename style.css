@@ -547,6 +547,7 @@ body.clips-page {
     display: block;
     background: #000;
     object-fit: contain;
+    cursor: pointer; /* click to pause/play */
 }
 
 .theater-controls {

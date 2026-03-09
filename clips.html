@@ -511,8 +511,15 @@
         if (theater.style.display === 'none') return;
         const scrollY = window.scrollY || window.pageYOffset;
         const vh = window.innerHeight / 100;
-        const maxH = Math.max(20 * vh, 55 * vh - scrollY * 0.1);
+        // shrinks faster (0.16) and bottoms out smaller (12vh)
+        const maxH = Math.max(12 * vh, 55 * vh - scrollY * 0.16);
         document.getElementById('theater-video').style.maxHeight = maxH + 'px';
+    });
+
+    // ── Click theater video to pause / play ──────────────────
+    document.getElementById('theater-video').addEventListener('click', () => {
+        if (tvid.paused) tvid.play().catch(()=>{});
+        else tvid.pause();
     });
 
     // ── Tab-away pause ───────────────────────────────────────
