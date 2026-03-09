@@ -9,34 +9,29 @@
 <body class="clips-page">
     <header>
         <div class="logo">hatchat - 1.0.0.7</div>
-        <nav>
-            <ul>
-                <li><a href="clips.html">clips</a></li>
-                <li><a href="index.html">homepage</a></li>
-                <li><a href="chat.html">hatchat</a></li>
-                <li><a href="settings.html">settings</a></li>
-            </ul>
-        </nav>
+        <nav><ul>
+            <li><a href="clips.html">clips</a></li>
+            <li><a href="index.html">homepage</a></li>
+            <li><a href="chat.html">hatchat</a></li>
+            <li><a href="settings.html">settings</a></li>
+        </ul></nav>
     </header>
 
     <div class="clips-main">
-
-        <!-- Status message (success / error feedback) -->
         <div id="clips-status" class="clips-status-msg"></div>
 
-        <!-- ── Upload Section ─────────────────────────────────── -->
+        <!-- ── Upload Section ─────────────────────────────── -->
         <div class="clips-upload-section" id="drop-zone">
             <h2>upload a clip</h2>
-            <p>mp4 · webm · mov &nbsp;|&nbsp; max 500 MB &nbsp;|&nbsp; drag & drop or browse</p>
+            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB per file &nbsp;|&nbsp; 30s max &nbsp;|&nbsp; drag & drop or browse</p>
 
-            <label class="clip-upload-label" for="clip-file-input">choose file</label>
+            <label class="clip-upload-label" for="clip-file-input">choose files</label>
             <input type="file" id="clip-file-input" class="clip-file-input"
-                   accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov">
+                   accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
             <button class="clip-submit-btn" id="clip-submit-btn" disabled>upload</button>
 
-            <span class="clip-selected-name" id="clip-selected-name">no file selected</span>
+            <span class="clip-selected-name" id="clip-selected-name">no files selected</span>
 
-            <!-- Progress bar shown during upload -->
             <div class="clip-upload-progress" id="clip-upload-progress">
                 <span id="clip-progress-label">uploading...</span>
                 <div class="clip-progress-bar-wrap">
@@ -45,247 +40,242 @@
             </div>
         </div>
 
-        <!-- ── Clips Grid ──────────────────────────────────────── -->
+        <!-- ── Clips Grid ──────────────────────────────────── -->
         <div class="clips-grid-section">
             <h2>all clips</h2>
             <div class="clips-grid" id="clips-grid">
                 <div class="clips-empty" id="clips-empty">loading clips...</div>
             </div>
         </div>
-
     </div>
 
-    <script>
-        // ── Config ──────────────────────────────────────────────
-        // GitHub Pages serves the HTML; the Node server lives on Render.
-        // Update this URL if your Render service name changes.
-        const SERVER = 'https://averrgy-github-io.onrender.com';
+<script>
+    const SERVER   = 'https://averrgy-github-io.onrender.com';
+    const username = localStorage.getItem('chat_username') || null;
 
-        // ── Elements ────────────────────────────────────────────
-        const fileInput      = document.getElementById('clip-file-input');
-        const submitBtn      = document.getElementById('clip-submit-btn');
-        const selectedName   = document.getElementById('clip-selected-name');
-        const dropZone       = document.getElementById('drop-zone');
-        const progressWrap   = document.getElementById('clip-upload-progress');
-        const progressBar    = document.getElementById('clip-progress-bar');
-        const progressLabel  = document.getElementById('clip-progress-label');
-        const grid           = document.getElementById('clips-grid');
-        const emptyMsg       = document.getElementById('clips-empty');
-        const statusMsg      = document.getElementById('clips-status');
+    const fileInput     = document.getElementById('clip-file-input');
+    const submitBtn     = document.getElementById('clip-submit-btn');
+    const selectedName  = document.getElementById('clip-selected-name');
+    const dropZone      = document.getElementById('drop-zone');
+    const progressWrap  = document.getElementById('clip-upload-progress');
+    const progressBar   = document.getElementById('clip-progress-bar');
+    const progressLabel = document.getElementById('clip-progress-label');
+    const grid          = document.getElementById('clips-grid');
+    const statusMsg     = document.getElementById('clips-status');
 
-        let selectedFile = null;
+    let selectedFiles = [];
 
-        // ── File selection via input ────────────────────────────
-        fileInput.addEventListener('change', () => {
-            const file = fileInput.files[0];
-            if (file) selectFile(file);
-        });
+    // ── File selection ───────────────────────────────────────
+    fileInput.addEventListener('change', () => selectFiles([...fileInput.files]));
 
-        function selectFile(file) {
-            // Validate type
-            const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
-            if (!allowed.includes(file.type) && !file.name.match(/\.(mp4|webm|mov)$/i)) {
-                showStatus('Only mp4, webm, and mov files are allowed.', 'error');
-                return;
-            }
-            // Validate size (500 MB)
-            if (file.size > 500 * 1024 * 1024) {
-                showStatus('File is too large. Max size is 500 MB.', 'error');
-                return;
-            }
+    function selectFiles(files) {
+        const MAX = 50 * 1024 * 1024;
+        const NVIDIA = /\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
+        const allowed = [];
+        const rejected = [];
 
-            selectedFile = file;
-            selectedName.textContent = file.name;
-            submitBtn.disabled = false;
-        }
-
-        // ── Drag & Drop ─────────────────────────────────────────
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file) selectFile(file);
-        });
-
-        // ── Upload ───────────────────────────────────────────────
-        // We use XMLHttpRequest (not fetch) so we can track upload progress.
-        submitBtn.addEventListener('click', () => {
-            if (!selectedFile) return;
-
-            const formData = new FormData();
-            formData.append('clip', selectedFile);
-
-            const xhr = new XMLHttpRequest();
-
-            // Show progress bar
-            progressWrap.style.display = 'block';
-            submitBtn.disabled = true;
-            progressBar.style.width = '0%';
-            progressLabel.textContent = 'uploading...';
-
-            // Track progress
-            // xhr.upload.onprogress fires as bytes are sent to the server.
-            // We calculate percentage and widen the green bar accordingly.
-            xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable) {
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = pct + '%';
-                    progressLabel.textContent = `uploading... ${pct}%`;
-                }
-            });
-
-            xhr.addEventListener('load', () => {
-                progressWrap.style.display = 'none';
-                selectedFile = null;
-                selectedName.textContent = 'no file selected';
-                fileInput.value = '';
-                submitBtn.disabled = true;
-
-                try {
-                    const result = JSON.parse(xhr.responseText);
-                    if (result.success) {
-                        showStatus('Clip uploaded successfully!', 'success');
-                        loadClips(); // refresh grid
-                    } else {
-                        showStatus('Upload failed: ' + (result.message || 'unknown error'), 'error');
-                    }
-                } catch {
-                    // Server returned non-JSON — likely old server code without /upload-clip route.
-                    // Show the raw status code to help diagnose.
-                    const code = xhr.status;
-                    if (code === 404) {
-                        showStatus('Upload failed: server does not have the /upload-clip route yet. Redeploy Render.', 'error');
-                    } else if (code === 0 || code >= 500) {
-                        showStatus('Upload failed: server error or still waking up. Wait ~30s and try again.', 'error');
-                    } else {
-                        showStatus(`Upload failed: unexpected response (HTTP ${code}). Check Render logs.`, 'error');
-                    }
-                }
-            });
-
-            xhr.addEventListener('error', () => {
-                progressWrap.style.display = 'none';
-                submitBtn.disabled = false;
-                showStatus('Network error — server may be waking up. Wait 30s and try again.', 'error');
-            });
-
-            xhr.addEventListener('timeout', () => {
-                progressWrap.style.display = 'none';
-                submitBtn.disabled = false;
-                showStatus('Upload timed out — file may be too large, or server is cold. Try again.', 'error');
-            });
-
-            xhr.open('POST', `${SERVER}/upload-clip`);
-            xhr.timeout = 5 * 60 * 1000; // 5 min timeout for large files
-            xhr.send(formData);
-        });
-
-        // ── Load Clips ───────────────────────────────────────────
-        // Render free tier sleeps after 15 min idle. Cold start takes 30-60s.
-        // Strategy: 10 retries × 8s = up to 80s total wait.
-        // We parse the response text manually so a non-JSON wake page causes
-        // a retry rather than a crash.
-        async function loadClips(attempt = 1) {
-            const MAX = 10;
-            const RETRY_MS = 8000;
-
-            if (attempt === 1) {
-                grid.innerHTML = '<div class="clips-empty">loading clips...</div>';
+        files.forEach(f => {
+            if (!NVIDIA.test(f.name)) {
+                rejected.push(`${f.name} — not an NVIDIA clip (no date in filename)`);
+            } else if (f.size > MAX) {
+                rejected.push(`${f.name} — too large (max 50 MB)`);
             } else {
-                grid.innerHTML = `<div class="clips-empty">waking server up... (${attempt}/${MAX}) — this takes ~30s on first load</div>`;
+                allowed.push(f);
             }
+        });
 
+        if (rejected.length) showStatus('Rejected: ' + rejected.join(' | '), 'error');
+        if (allowed.length === 0) { submitBtn.disabled = true; return; }
+
+        selectedFiles = allowed;
+        selectedName.textContent = allowed.length === 1
+            ? allowed[0].name
+            : `${allowed.length} files selected`;
+        submitBtn.disabled = false;
+    }
+
+    // ── Drag & Drop ──────────────────────────────────────────
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault(); dropZone.classList.remove('dragover');
+        selectFiles([...e.dataTransfer.files]);
+    });
+
+    // ── Upload (all files in one request) ───────────────────
+    submitBtn.addEventListener('click', () => {
+        if (!selectedFiles.length) return;
+        if (!username) return showStatus('You must be logged in to upload clips. Open hatchat first.', 'error');
+
+        const formData = new FormData();
+        formData.append('uploader', username);
+        selectedFiles.forEach(f => formData.append('clips[]', f));
+
+        const xhr = new XMLHttpRequest();
+        progressWrap.style.display = 'block';
+        submitBtn.disabled = true;
+        progressBar.style.width = '0%';
+        progressLabel.textContent = 'uploading...';
+
+        xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = pct + '%';
+                progressLabel.textContent = `uploading... ${pct}%`;
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            progressWrap.style.display = 'none';
+            selectedFiles = []; selectedName.textContent = 'no files selected';
+            fileInput.value = ''; submitBtn.disabled = true;
             try {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 7000); // 7s per attempt
-                const res  = await fetch(`${SERVER}/api/clips`, { signal: controller.signal });
-                clearTimeout(timer);
-                const text = await res.text();
-
-                let data;
-                try { data = JSON.parse(text); }
-                catch { throw new Error('non-JSON response'); }
-
-                grid.innerHTML = '';
-                if (!data.clips || data.clips.length === 0) {
-                    grid.innerHTML = '<div class="clips-empty">no clips yet — be the first to upload one</div>';
-                    return;
-                }
-                data.clips.forEach(clip => grid.appendChild(buildClipCard(clip)));
-
-            } catch (err) {
-                console.warn(`Clips load attempt ${attempt} failed:`, err.message);
-                if (attempt < MAX) {
-                    setTimeout(() => loadClips(attempt + 1), RETRY_MS);
+                const r = JSON.parse(xhr.responseText);
+                if (r.success) {
+                    const errMsg = r.errors && r.errors.length
+                        ? ` (${r.errors.length} failed: ${r.errors.map(e=>e.filename).join(', ')})`
+                        : '';
+                    showStatus(`${r.uploaded.length} clip(s) uploaded!${errMsg}`, r.errors?.length ? 'error' : 'success');
+                    loadClips();
                 } else {
-                    grid.innerHTML = '<div class="clips-empty">server took too long to wake up — try refreshing the page</div>';
+                    showStatus('Upload failed: ' + (r.message || 'unknown error'), 'error');
                 }
+            } catch {
+                const c = xhr.status;
+                showStatus(c === 404 ? 'Upload failed: route missing, redeploy Render.'
+                    : `Upload failed: HTTP ${c}`, 'error');
             }
-        }
+        });
 
-        // ── Build a single clip card ─────────────────────────────
-        function buildClipCard(clip) {
-            // clip = { filename, url, created_at }
-            const filename = clip.filename || clip; // fallback for old format
-            const url      = clip.url || `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
+        xhr.addEventListener('error', () => {
+            progressWrap.style.display = 'none'; submitBtn.disabled = false;
+            showStatus('Network error — server may be waking up. Wait 30s and retry.', 'error');
+        });
 
-            const card = document.createElement('div');
-            card.className = 'clip-card';
+        xhr.open('POST', `${SERVER}/upload-clip`);
+        xhr.timeout = 10 * 60 * 1000;
+        xhr.send(formData);
+    });
 
-            const video = document.createElement('video');
-            video.controls = true;
-            video.preload  = 'metadata';
-            video.src      = url;
+    // ── Load Clips ───────────────────────────────────────────
+    async function loadClips(attempt = 1) {
+        const MAX = 10, RETRY = 8000;
+        if (attempt === 1) grid.innerHTML = '<div class="clips-empty">loading clips...</div>';
+        else grid.innerHTML = `<div class="clips-empty">waking server... (${attempt}/${MAX})</div>`;
 
-            const info = document.createElement('div');
-            info.className = 'clip-card-info';
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 7000);
+            const res = await fetch(`${SERVER}/api/clips`, { signal: ctrl.signal });
+            clearTimeout(t);
+            const data = JSON.parse(await res.text());
 
-            const displayName = filename.replace(/\.[^.]+$/, '');
-            const nameEl = document.createElement('p');
-            nameEl.className   = 'clip-card-name';
-            nameEl.textContent = displayName;
-            nameEl.title       = filename;
-            info.appendChild(nameEl);
-
-            // Parse date from NVIDIA filename or created_at
-            const dateMatch = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
-            if (dateMatch) {
-                const [, yr, mo, dy, hr, min] = dateMatch;
-                const dateEl = document.createElement('p');
-                dateEl.className   = 'clip-card-date';
-                dateEl.textContent = `${yr}-${mo}-${dy}  ${hr}:${min}`;
-                info.appendChild(dateEl);
-            } else if (clip.created_at) {
-                const dateEl = document.createElement('p');
-                dateEl.className   = 'clip-card-date';
-                dateEl.textContent = new Date(clip.created_at).toLocaleString();
-                info.appendChild(dateEl);
+            grid.innerHTML = '';
+            if (!data.clips || data.clips.length === 0) {
+                grid.innerHTML = '<div class="clips-empty">no clips yet</div>'; return;
             }
 
-            card.appendChild(video);
-            card.appendChild(info);
-            return card;
+            // Group by uploader
+            const groups = {};
+            data.clips.forEach(clip => {
+                const u = clip.uploader || 'unknown';
+                if (!groups[u]) groups[u] = [];
+                groups[u].push(clip);
+            });
+
+            Object.keys(groups).sort().forEach(uploader => {
+                const section = document.createElement('div');
+                section.className = 'clips-user-section';
+
+                const heading = document.createElement('h3');
+                heading.className = 'clips-user-heading';
+                heading.textContent = uploader;
+                section.appendChild(heading);
+
+                const row = document.createElement('div');
+                row.className = 'clips-user-row';
+                groups[uploader].forEach(clip => row.appendChild(buildClipCard(clip)));
+                section.appendChild(row);
+                grid.appendChild(section);
+            });
+
+        } catch (e) {
+            console.warn(`Clips load attempt ${attempt} failed:`, e.message);
+            if (attempt < MAX) setTimeout(() => loadClips(attempt + 1), RETRY);
+            else grid.innerHTML = '<div class="clips-empty">server took too long to wake up — try refreshing</div>';
+        }
+    }
+
+    // ── Build clip card ──────────────────────────────────────
+    function buildClipCard(clip) {
+        const filename = clip.filename || clip;
+        const url      = clip.url || `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
+
+        const card = document.createElement('div');
+        card.className = 'clip-card';
+
+        const video = document.createElement('video');
+        video.controls = true; video.preload = 'metadata'; video.src = url;
+
+        const info = document.createElement('div');
+        info.className = 'clip-card-info';
+
+        const displayName = filename.replace(/\.[^.]+$/, '');
+        const nameEl = document.createElement('p');
+        nameEl.className = 'clip-card-name';
+        nameEl.textContent = displayName; nameEl.title = filename;
+        info.appendChild(nameEl);
+
+        const dateMatch = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
+        if (dateMatch) {
+            const [, yr, mo, dy, hr, min] = dateMatch;
+            const dateEl = document.createElement('p');
+            dateEl.className = 'clip-card-date';
+            dateEl.textContent = `${yr}-${mo}-${dy}  ${hr}:${min}`;
+            info.appendChild(dateEl);
+        } else if (clip.created_at) {
+            const dateEl = document.createElement('p');
+            dateEl.className = 'clip-card-date';
+            dateEl.textContent = new Date(clip.created_at).toLocaleString();
+            info.appendChild(dateEl);
         }
 
-        // ── Status message helper ────────────────────────────────
-        function showStatus(msg, type) {
-            statusMsg.textContent = msg;
-            statusMsg.className   = `clips-status-msg ${type}`;
-            clearTimeout(statusMsg._timer);
-            statusMsg._timer = setTimeout(() => {
-                statusMsg.className = 'clips-status-msg';
-            }, 6000);
+        // Delete button — only shown if this is the uploader
+        if (username && clip.uploader &&
+            username.toLowerCase() === clip.uploader.toLowerCase() && clip.public_id) {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'clip-delete-btn';
+            delBtn.textContent = '✕ delete';
+            delBtn.addEventListener('click', async () => {
+                if (!confirm(`Delete "${displayName}"?`)) return;
+                try {
+                    const r = await fetch(`${SERVER}/api/clips/${encodeURIComponent(clip.public_id)}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uploader: username }),
+                    });
+                    const d = await r.json();
+                    if (d.success) { showStatus('Clip deleted.', 'success'); loadClips(); }
+                    else showStatus('Delete failed: ' + d.message, 'error');
+                } catch (e) { showStatus('Delete error: ' + e.message, 'error'); }
+            });
+            info.appendChild(delBtn);
         }
 
-        // ── Init ─────────────────────────────────────────────────
-        loadClips();
-    </script>
+        card.appendChild(video);
+        card.appendChild(info);
+        return card;
+    }
+
+    // ── Status helper ────────────────────────────────────────
+    function showStatus(msg, type) {
+        statusMsg.textContent = msg;
+        statusMsg.className = `clips-status-msg ${type}`;
+        clearTimeout(statusMsg._timer);
+        statusMsg._timer = setTimeout(() => { statusMsg.className = 'clips-status-msg'; }, 7000);
+    }
+
+    loadClips();
+</script>
 </body>
 </html>

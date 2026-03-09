@@ -62,6 +62,24 @@
                 <button type="submit" class="chat-button">Send</button>
             </form>
         </div>
+
+        <!-- ── Voice Chat Panel ──────────────────────────── -->
+        <div class="voice-panel" id="voice-panel">
+            <h3 class="voice-panel-title">voice</h3>
+            <div class="voice-channel">
+                <div class="voice-channel-header">
+                    <span class="voice-channel-icon">🔊</span>
+                    <span class="voice-channel-name">general</span>
+                    <button class="voice-join-btn" id="voice-join-btn">join</button>
+                </div>
+                <div class="voice-members" id="voice-members"></div>
+            </div>
+            <div class="voice-controls" id="voice-controls" style="display:none">
+                <button class="voice-ctrl-btn" id="voice-mute-btn">🎤 mute</button>
+                <button class="voice-ctrl-btn" id="voice-deaf-btn">🔇 deafen</button>
+            </div>
+        </div>
+
     </div>
 
     <!-- Username Modal -->
@@ -743,6 +761,165 @@
     }
 
     document.addEventListener('visibilitychange', () => {});
+
+    // ── Voice Chat (WebRTC via Socket.IO signalling) ──────────────────
+    (function() {
+        const joinBtn     = document.getElementById('voice-join-btn');
+        const membersEl   = document.getElementById('voice-members');
+        const controlsEl  = document.getElementById('voice-controls');
+        const muteBtn     = document.getElementById('voice-mute-btn');
+        const deafBtn     = document.getElementById('voice-deaf-btn');
+
+        let inVoice      = false;
+        let isMuted      = false;
+        let isDeafened   = false;
+        let localStream  = null;
+        const peers      = {};   // socketId -> RTCPeerConnection
+        const audioEls   = {};   // socketId -> <audio>
+        let voiceMembers = {};   // socketId -> { username }
+
+        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        function renderMembers() {
+            membersEl.innerHTML = '';
+            Object.values(voiceMembers).forEach(({ username: u, muted }) => {
+                const div = document.createElement('div');
+                div.className = 'voice-member' + (muted ? ' muted' : '');
+                div.innerHTML = `<span class="voice-member-icon">🎙</span><span>${u}</span>`;
+                membersEl.appendChild(div);
+            });
+        }
+
+        async function joinVoice() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            } catch(e) {
+                alert('Microphone access denied: ' + e.message); return;
+            }
+            inVoice = true;
+            joinBtn.textContent = 'leave';
+            joinBtn.classList.add('active');
+            controlsEl.style.display = 'flex';
+            socket.emit('voice_join', { username });
+        }
+
+        function leaveVoice() {
+            socket.emit('voice_leave', { username });
+            if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+            Object.values(peers).forEach(pc => pc.close());
+            Object.keys(peers).forEach(id => delete peers[id]);
+            Object.values(audioEls).forEach(a => { a.srcObject = null; a.remove(); });
+            Object.keys(audioEls).forEach(id => delete audioEls[id]);
+            voiceMembers = {};
+            inVoice = false;
+            isMuted = false; isDeafened = false;
+            joinBtn.textContent = 'join';
+            joinBtn.classList.remove('active');
+            controlsEl.style.display = 'none';
+            muteBtn.classList.remove('active');
+            deafBtn.classList.remove('active');
+            muteBtn.textContent = '🎤 mute';
+            deafBtn.textContent = '🔇 deafen';
+            renderMembers();
+        }
+
+        joinBtn.addEventListener('click', () => inVoice ? leaveVoice() : joinVoice());
+
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+            muteBtn.classList.toggle('active', isMuted);
+            muteBtn.textContent = isMuted ? '🎤 unmute' : '🎤 mute';
+            socket.emit('voice_mute', { muted: isMuted });
+        });
+
+        deafBtn.addEventListener('click', () => {
+            isDeafened = !isDeafened;
+            Object.values(audioEls).forEach(a => a.muted = isDeafened);
+            deafBtn.classList.toggle('active', isDeafened);
+            deafBtn.textContent = isDeafened ? '🔇 undeafen' : '🔇 deafen';
+        });
+
+        // ── Signalling ────────────────────────────────────────
+        async function createPeer(remoteId, initiator) {
+            const pc = new RTCPeerConnection(iceConfig);
+            peers[remoteId] = pc;
+
+            if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+            pc.onicecandidate = e => {
+                if (e.candidate) socket.emit('voice_ice', { to: remoteId, candidate: e.candidate });
+            };
+
+            pc.ontrack = e => {
+                let audio = audioEls[remoteId];
+                if (!audio) {
+                    audio = document.createElement('audio');
+                    audio.autoplay = true;
+                    audio.muted = isDeafened;
+                    document.body.appendChild(audio);
+                    audioEls[remoteId] = audio;
+                }
+                audio.srcObject = e.streams[0];
+            };
+
+            if (initiator) {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit('voice_offer', { to: remoteId, offer });
+            }
+            return pc;
+        }
+
+        // Someone else joined — we initiate
+        socket.on('voice_user_joined', async ({ socketId, username: u }) => {
+            voiceMembers[socketId] = { username: u, muted: false };
+            renderMembers();
+            if (inVoice) await createPeer(socketId, true);
+        });
+
+        // Full list of current voice members sent when we join
+        socket.on('voice_current_members', async (members) => {
+            members.forEach(({ socketId, username: u }) => {
+                voiceMembers[socketId] = { username: u, muted: false };
+            });
+            renderMembers();
+            // Create peer connections to everyone already in voice
+            for (const { socketId } of members) {
+                await createPeer(socketId, false);
+            }
+        });
+
+        socket.on('voice_offer', async ({ from, offer }) => {
+            let pc = peers[from];
+            if (!pc) pc = await createPeer(from, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('voice_answer', { to: from, answer });
+        });
+
+        socket.on('voice_answer', async ({ from, answer }) => {
+            const pc = peers[from];
+            if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        });
+
+        socket.on('voice_ice', async ({ from, candidate }) => {
+            const pc = peers[from];
+            if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+        });
+
+        socket.on('voice_user_left', ({ socketId }) => {
+            if (peers[socketId]) { peers[socketId].close(); delete peers[socketId]; }
+            if (audioEls[socketId]) { audioEls[socketId].srcObject = null; audioEls[socketId].remove(); delete audioEls[socketId]; }
+            delete voiceMembers[socketId];
+            renderMembers();
+        });
+
+        socket.on('voice_mute_update', ({ socketId, muted }) => {
+            if (voiceMembers[socketId]) { voiceMembers[socketId].muted = muted; renderMembers(); }
+        });
+    })();
     </script>
 </body>
 </html>

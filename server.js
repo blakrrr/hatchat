@@ -65,50 +65,76 @@ app.post('/upload', imageUpload.single('image'), (req, res) => {
 // Cloudinary handles CDN delivery, so clips load fast everywhere.
 // The original filename is preserved as the public_id so NVIDIA date-names sort correctly.
 
-const clipMemStorage = multer.memoryStorage(); // buffer in RAM, then stream to Cloudinary
+// NVIDIA filename pattern: "Game Name YYYY.MM.DD - HH.MM.SS.frames.ext"
+const NVIDIA_PATTERN = /\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
+const MAX_CLIP_MB    = 50;
+const MAX_CLIP_BYTES = MAX_CLIP_MB * 1024 * 1024;
+
+const clipMemStorage = multer.memoryStorage();
 
 const clipUploadMW = multer({
     storage: clipMemStorage,
     fileFilter: (req, file, cb) => {
-        const mimeOk = file.mimetype.startsWith('video/') ||
-                       file.mimetype === 'application/octet-stream';
+        // Reject non-NVIDIA filenames immediately
+        if (!NVIDIA_PATTERN.test(file.originalname)) {
+            return cb(new Error('Only NVIDIA GameDVR clips (with date in filename) are allowed.'), false);
+        }
+        const mimeOk = file.mimetype.startsWith('video/') || file.mimetype === 'application/octet-stream';
         const extOk  = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.originalname);
         (mimeOk || extOk) ? cb(null, true) : cb(new Error('Only video files allowed'), false);
     },
-    limits: { fileSize: 500 * 1024 * 1024 }
+    limits: { fileSize: MAX_CLIP_BYTES }
 });
 
+// POST /upload-clip — supports multiple files (field name "clips[]")
 app.post('/upload-clip', (req, res) => {
-    clipUploadMW.single('clip')(req, res, async (err) => {
+    clipUploadMW.array('clips[]', 20)(req, res, async (err) => {
         if (err) return res.status(400).json({ success: false, message: err.message });
-        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+        const files = req.files;
+        if (!files || files.length === 0) return res.status(400).json({ success: false, message: 'No files uploaded' });
 
         try {
-            // Strip extension for Cloudinary public_id (it adds its own)
-            const baseName = req.file.originalname.replace(/\.[^.]+$/, '');
+            const uploader = (req.body && req.body.uploader) ? req.body.uploader.trim() : 'unknown';
+            const results  = [];
+            const errors   = [];
 
-            const uploadResult = await new Promise((resolve, reject) => {
-                const stream = cloudinary.uploader.upload_stream(
-                    {
-                        resource_type: 'video',
-                        folder: 'hatchat-clips',
-                        public_id: baseName,
-                        overwrite: false,
-                        // Cloudinary's built-in compression (equivalent to CRF 28)
-                        eager: [{ quality: 'auto', fetch_format: 'mp4' }],
-                        eager_async: true,
-                    },
-                    (error, result) => error ? reject(error) : resolve(result)
-                );
-                stream.end(req.file.buffer);
-            });
+            for (const file of files) {
+                const baseName = file.originalname.replace(/\.[^.]+$/, '');
+                try {
+                    const uploadResult = await new Promise((resolve, reject) => {
+                        const stream = cloudinary.uploader.upload_stream(
+                            {
+                                resource_type: 'video',
+                                folder: 'hatchat-clips',
+                                public_id: baseName,
+                                overwrite: false,
+                                // Trim to 30 seconds, compress to ~50 MB quality
+                                eager: [{
+                                    duration: '30',
+                                    quality: 'auto:low',
+                                    fetch_format: 'mp4',
+                                    bit_rate: '1m',
+                                }],
+                                eager_async: true,
+                                tags: [`uploader:${uploader}`],
+                                context: `uploader=${uploader}`,
+                            },
+                            (error, result) => error ? reject(error) : resolve(result)
+                        );
+                        stream.end(file.buffer);
+                    });
+                    results.push({
+                        filename: file.originalname,
+                        url: uploadResult.secure_url,
+                        public_id: uploadResult.public_id,
+                        uploader,
+                    });
+                } catch (e) {
+                    errors.push({ filename: file.originalname, message: e.message });
+                }
+            }
 
-            res.status(200).json({
-                success: true,
-                filename: req.file.originalname,
-                url: uploadResult.secure_url,
-                public_id: uploadResult.public_id,
-            });
+            res.status(200).json({ success: true, uploaded: results, errors });
         } catch (error) {
             console.error('Cloudinary upload error:', error);
             res.status(500).json({ success: false, message: 'Upload to cloud failed: ' + error.message });
@@ -116,7 +142,40 @@ app.post('/upload-clip', (req, res) => {
     });
 });
 
-// GET /api/clips — returns all clips from Cloudinary, newest first
+// DELETE /api/clips/:public_id — only the original uploader can delete their clip
+app.delete('/api/clips/:public_id(*)', async (req, res) => {
+    const { public_id } = req.params;          // e.g. "hatchat-clips/Arc Raiders 2026..."
+    const { uploader }  = req.body || {};
+
+    if (!uploader) return res.status(400).json({ success: false, message: 'Missing uploader' });
+
+    try {
+        // Fetch the resource to verify ownership
+        const info = await cloudinary.api.resource(public_id, {
+            resource_type: 'video', context: true, tags: true
+        });
+
+        let owner = 'unknown';
+        if (info.context && info.context.custom && info.context.custom.uploader) {
+            owner = info.context.custom.uploader;
+        } else if (info.tags) {
+            const t = info.tags.find(t => t.startsWith('uploader:'));
+            if (t) owner = t.replace('uploader:', '');
+        }
+
+        if (owner.toLowerCase() !== uploader.toLowerCase()) {
+            return res.status(403).json({ success: false, message: 'You can only delete your own clips.' });
+        }
+
+        await cloudinary.uploader.destroy(public_id, { resource_type: 'video' });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// GET /api/clips — returns all clips from Cloudinary, grouped by uploader then sorted by date
 app.get('/api/clips', async (req, res) => {
     try {
         const result = await cloudinary.api.resources({
@@ -124,14 +183,31 @@ app.get('/api/clips', async (req, res) => {
             type: 'upload',
             prefix: 'hatchat-clips/',
             max_results: 200,
+            context: true,  // fetch uploader metadata
+            tags: true,
         });
-        const clips = result.resources
-            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            .map(r => ({
+        const clips = result.resources.map(r => {
+            // Extract uploader from context or tags
+            let uploader = 'unknown';
+            if (r.context && r.context.custom && r.context.custom.uploader) {
+                uploader = r.context.custom.uploader;
+            } else if (r.tags) {
+                const tag = r.tags.find(t => t.startsWith('uploader:'));
+                if (tag) uploader = tag.replace('uploader:', '');
+            }
+            return {
                 filename: path.basename(r.public_id) + '.' + r.format,
                 url: r.secure_url,
                 created_at: r.created_at,
-            }));
+                uploader,
+            };
+        });
+        // Sort: by uploader name, then newest-first within each uploader
+        clips.sort((a, b) => {
+            const u = a.uploader.localeCompare(b.uploader);
+            if (u !== 0) return u;
+            return new Date(b.created_at) - new Date(a.created_at);
+        });
         res.json({ success: true, clips });
     } catch (error) {
         console.error('Cloudinary list error:', error);
@@ -143,6 +219,7 @@ app.get('/api/clips', async (req, res) => {
 const onlineUsers = new Set();
 const userColors = {};
 let users = {};
+const voiceMembers = {};  // socketId -> { username }
 
 const MESSAGES_FILE = path.join(__dirname, 'chat_messages.json');
 const USER_COLORS_FILE = path.join(__dirname, 'user_colors.json');
@@ -238,6 +315,27 @@ io.on('connection', (socket) => {
         io.emit('update_users', { users: Object.values(users) });
     });
 
+    // ── Voice signalling ─────────────────────────────────────────────
+    socket.on('voice_join', () => {
+        const current = Object.entries(voiceMembers).map(([socketId, d]) => ({ socketId, username: d.username }));
+        socket.emit('voice_current_members', current);
+        voiceMembers[socket.id] = { username };
+        socket.broadcast.emit('voice_user_joined', { socketId: socket.id, username });
+    });
+
+    socket.on('voice_leave', () => {
+        delete voiceMembers[socket.id];
+        io.emit('voice_user_left', { socketId: socket.id });
+    });
+
+    socket.on('voice_offer',  ({ to, offer })     => io.to(to).emit('voice_offer',  { from: socket.id, offer }));
+    socket.on('voice_answer', ({ to, answer })    => io.to(to).emit('voice_answer', { from: socket.id, answer }));
+    socket.on('voice_ice',    ({ to, candidate }) => io.to(to).emit('voice_ice',    { from: socket.id, candidate }));
+    socket.on('voice_mute',   ({ muted })         => {
+        if (voiceMembers[socket.id]) voiceMembers[socket.id].muted = muted;
+        io.emit('voice_mute_update', { socketId: socket.id, muted });
+    });
+
     io.emit('update_users', { users: Object.values(users) });
 
     socket.on('disconnect', () => {
@@ -248,6 +346,11 @@ io.on('connection', (socket) => {
         saveMessages();
         io.emit('user_leave', { username, users: Object.values(users), userColors });
         io.emit('update_users', { users: Object.values(users) });
+        // Clean up voice if they were in it
+        if (voiceMembers[socket.id]) {
+            delete voiceMembers[socket.id];
+            io.emit('voice_user_left', { socketId: socket.id });
+        }
     });
 });
 
