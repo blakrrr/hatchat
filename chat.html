@@ -479,151 +479,100 @@
     }
 
     // ── Create a message element ──────────────────────────────────────────
-    // replyTo shape: { username, message, color } | null
     function createMessageElement(sender, message, timestamp,
                                   isContinuation = false, color, image = null, replyTo = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message';
-        // Store raw timestamp so recalcContinuations can detect time gaps
+        if (isContinuation) messageDiv.classList.add('continued-message');
         if (timestamp) messageDiv.setAttribute('data-ts', new Date(timestamp).getTime());
 
-        // ── Username area ─────────────────────────────────────────────────
-        // IMPORTANT: We ALWAYS create the sender element so recalcContinuations
-        // can find data-sender on every message. CSS handles visibility via
-        // .continued-message .username-area { display: none }.
+        const msgColor = color || userColors[sender] || null;
+
+        // ── Username area (always in DOM; CSS hides it for continuations) ─
         const usernameArea = document.createElement('div');
         usernameArea.className = 'username-area';
-
         const senderEl = document.createElement('span');
         senderEl.className = 'message-sender';
         senderEl.setAttribute('data-sender', sender);
         senderEl.textContent = sender;
-        if (color)                   senderEl.style.color = color;
-        else if (userColors[sender]) senderEl.style.color = userColors[sender];
-
+        if (msgColor) senderEl.style.color = msgColor;
         const sep = document.createElement('span');
         sep.className   = 'message-separator';
         sep.textContent = ' ~ ';
-
         usernameArea.appendChild(senderEl);
         usernameArea.appendChild(sep);
-        messageDiv.appendChild(usernameArea);
 
-        if (isContinuation) messageDiv.classList.add('continued-message');
+        // ── Reply button (always created up front so it's always available) ─
+        const replyBtn = document.createElement('button');
+        replyBtn.className   = 'reply-btn';
+        replyBtn.textContent = '↩';
+        replyBtn.title       = 'Reply';
+        replyBtn.type        = 'button';
+        replyBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            setReply({ username: sender, message: message || '', color: msgColor });
+        });
 
-        // ── Message content ──────────────────────────────────────────────
+        // ── Message content ───────────────────────────────────────────────
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
+        if (msgColor) messageContent.style.color = msgColor;
 
-        // ── Reply quote block ────────────────────────────────────────────
-        // The bracket shape (╭── author: text) is drawn entirely in CSS
-        // using border-left + border-top + border-radius on .reply-quote.
-        // --reply-color drives both the border and the ::after tail so
-        // the bracket takes on the quoted sender's color.
         if (replyTo) {
+            // Discord-style reply: curved bar on the left connecting quote to text
             const quoteColor = replyTo.color || userColors[replyTo.username] || '#666';
-
-            // Discord-style reply: a wrapper with a curved left-bar connecting
-            // the quote chip above to the reply text below.
             const wrapper = document.createElement('div');
             wrapper.className = 'reply-wrapper';
             wrapper.style.setProperty('--reply-color', quoteColor);
 
             const quote = document.createElement('div');
             quote.className = 'reply-quote';
-
             const qIcon = document.createElement('span');
             qIcon.className   = 'reply-quote-icon';
             qIcon.textContent = '↩';
-
             const qAuthor = document.createElement('span');
             qAuthor.className   = 'reply-quote-author';
             qAuthor.textContent = replyTo.username;
             qAuthor.style.color = quoteColor;
-
-            const qSep  = document.createTextNode(': ');
-
             const qText = document.createElement('span');
             qText.className   = 'reply-quote-text';
             const raw = replyTo.message || '[image]';
             qText.textContent = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
-
             quote.appendChild(qIcon);
             quote.appendChild(qAuthor);
-            quote.appendChild(qSep);
+            quote.appendChild(document.createTextNode(': '));
             quote.appendChild(qText);
-            wrapper.appendChild(quote);
 
-            // Reply text + image live inside the wrapper (not messageContent directly)
             const replyBody = document.createElement('div');
             replyBody.className = 'reply-body';
-            if (message && message.length > 0) {
-                replyBody.appendChild(document.createTextNode(message));
-            }
+            if (msgColor) replyBody.style.color = msgColor;
+            if (message && message.length > 0) replyBody.appendChild(document.createTextNode(message));
             if (image) {
                 const img = document.createElement('img');
-                img.src       = image;
-                img.className = 'message-image';
-                img.alt       = 'Shared image';
-                img.onerror   = () => { img.alt = 'Image failed to load'; };
+                img.src = image; img.className = 'message-image'; img.alt = 'Shared image';
+                img.onerror = () => { img.alt = 'Image failed to load'; };
                 img.addEventListener('click', () => window.open(image, '_blank'));
                 if (message && message.length > 0) replyBody.appendChild(document.createElement('br'));
                 replyBody.appendChild(img);
             }
-            if (color)                   replyBody.style.color = color;
-            else if (userColors[sender]) replyBody.style.color = userColors[sender];
-
+            wrapper.appendChild(quote);
             wrapper.appendChild(replyBody);
             messageContent.appendChild(wrapper);
-
-            messageDiv.appendChild(messageContent);
-            messageDiv.appendChild(replyBtn);
-            return messageDiv; // skip the normal text/image block below
+        } else {
+            if (message && message.length > 0) messageContent.appendChild(document.createTextNode(message));
+            if (image) {
+                const img = document.createElement('img');
+                img.src = image; img.className = 'message-image'; img.alt = 'Shared image';
+                img.onerror = () => { img.alt = 'Image failed to load'; };
+                img.addEventListener('click', () => window.open(image, '_blank'));
+                if (message && message.length > 0) messageContent.appendChild(document.createElement('br'));
+                messageContent.appendChild(img);
+            }
         }
 
-        // timestamps removed
-
-        // Text
-        if (message && message.length > 0) {
-            messageContent.appendChild(document.createTextNode(message));
-        }
-
-        // Image
-        if (image) {
-            const img = document.createElement('img');
-            img.src       = image;
-            img.className = 'message-image';
-            img.alt       = 'Shared image';
-            img.onerror   = () => { img.alt = 'Image failed to load'; };
-            img.addEventListener('click', () => window.open(image, '_blank'));
-            if (message && message.length > 0) messageContent.appendChild(document.createElement('br'));
-            messageContent.appendChild(img);
-        }
-
-        // Apply message color
-        if (color)              messageContent.style.color = color;
-        else if (userColors[sender]) messageContent.style.color = userColors[sender];
-
+        messageDiv.appendChild(usernameArea);
         messageDiv.appendChild(messageContent);
-
-        // ── Reply button (↩) — appears on hover via CSS ──────────────────
-        // We capture sender/message/color in a closure so the handler always
-        // has the right data regardless of when it fires.
-        const replyBtn = document.createElement('button');
-        replyBtn.className   = 'reply-btn';
-        replyBtn.textContent = '↩';
-        replyBtn.title       = 'Reply';
-        replyBtn.type        = 'button'; // prevent accidental form submission
-        replyBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            setReply({
-                username: sender,
-                message: message || '',
-                color: color || userColors[sender] || null
-            });
-        });
         messageDiv.appendChild(replyBtn);
-
         return messageDiv;
     }
 

@@ -6,65 +6,15 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const fsExtra = require('fs-extra');
-const { spawn } = require('child_process'); // built-in Node module, no install needed
+const { v2: cloudinary } = require('cloudinary');
 
-// ─── FFmpeg compression ────────────────────────────────────────────────────
-// Called after every clip upload. Responds to the client immediately so the
-// user doesn't wait; compression runs in the background and replaces the
-// original file when done.
-//
-// Settings explained:
-//   -crf 28        : quality (0=lossless, 51=worst). 28 is a good gaming-clip
-//                    balance — roughly 40-60% smaller than raw NVIDIA output.
-//   -preset fast   : encoding speed vs compression ratio. "fast" keeps CPU
-//                    usage reasonable on Render's free tier.
-//   -movflags +faststart : moves video metadata to the front of the file so
-//                    the browser can start playing before the whole file loads.
-function compressVideo(filePath) {
-    return new Promise((resolve) => {
-        const dir     = path.dirname(filePath);
-        const ext     = path.extname(filePath);
-        const base    = path.basename(filePath, ext);
-        const tmpPath = path.join(dir, base + '_tmp' + ext);
-
-        console.log(`Compressing: ${base}${ext}`);
-
-        const ffmpeg = spawn('ffmpeg', [
-            '-i',        filePath,
-            '-vcodec',   'libx264',
-            '-crf',      '28',
-            '-preset',   'fast',
-            '-acodec',   'aac',
-            '-movflags', '+faststart',
-            '-y',        tmpPath   // -y = overwrite tmpPath if it somehow exists
-        ]);
-
-        ffmpeg.on('close', (code) => {
-            if (code === 0) {
-                // Swap compressed file over the original
-                try {
-                    fs.renameSync(tmpPath, filePath);
-                    console.log(`Compression done: ${base}${ext}`);
-                } catch (err) {
-                    console.warn('Could not replace original with compressed file:', err.message);
-                }
-            } else {
-                // ffmpeg exited with an error — keep the original, clean up tmp
-                if (fs.existsSync(tmpPath)) {
-                    try { fs.unlinkSync(tmpPath); } catch (_) {}
-                }
-                console.warn(`Compression failed (exit ${code}): ${base}${ext}`);
-            }
-            resolve(); // always resolve so the promise never hangs
-        });
-
-        ffmpeg.on('error', (err) => {
-            // ffmpeg binary not found or other spawn error — just keep original
-            console.warn('ffmpeg unavailable, skipping compression:', err.message);
-            resolve();
-        });
-    });
-}
+// ─── Cloudinary config (set these in Render Environment Variables) ─────────
+// CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key:    process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const app = express();
 app.use(cors());
@@ -110,82 +60,82 @@ app.post('/upload', imageUpload.single('image'), (req, res) => {
     }
 });
 
-// ─── CLIP UPLOAD (new) ────────────────────────────────────────────────────
-// We keep the ORIGINAL filename so NVIDIA's date-based names sort correctly.
-// The clips directory is created automatically on first run.
-const CLIPS_DIR = path.join(__dirname, 'public', 'uploads', 'clips');
-fsExtra.ensureDirSync(CLIPS_DIR);
+// ─── CLIP UPLOAD — Cloudinary ─────────────────────────────────────────────
+// Files are stored in Cloudinary under the "hatchat-clips" folder.
+// Cloudinary handles CDN delivery, so clips load fast everywhere.
+// The original filename is preserved as the public_id so NVIDIA date-names sort correctly.
 
-const clipStorage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, CLIPS_DIR),
-    filename: (req, file, cb) => {
-        // Avoid collisions: if name exists, prefix with a tiny timestamp
-        let name = file.originalname;
-        if (fs.existsSync(path.join(CLIPS_DIR, name))) {
-            name = Date.now() + '_' + name;
-        }
-        cb(null, name);
-    }
-});
+const clipMemStorage = multer.memoryStorage(); // buffer in RAM, then stream to Cloudinary
 
-const clipUpload = multer({
-    storage: clipStorage,
+const clipUploadMW = multer({
+    storage: clipMemStorage,
     fileFilter: (req, file, cb) => {
-        // Windows/Chrome sometimes reports .mp4 as application/octet-stream.
-        // So we accept any video/* MIME type OR any recognised video extension.
-        // This is safe because we still reject at the OS level via multer limits.
         const mimeOk = file.mimetype.startsWith('video/') ||
                        file.mimetype === 'application/octet-stream';
         const extOk  = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.originalname);
-        if (mimeOk || extOk) {
-            cb(null, true);
-        } else {
-            cb(new Error('File type not allowed. Please upload mp4, webm, or mov.'), false);
-        }
+        (mimeOk || extOk) ? cb(null, true) : cb(new Error('Only video files allowed'), false);
     },
-    limits: { fileSize: 500 * 1024 * 1024 } // 500 MB per clip
+    limits: { fileSize: 500 * 1024 * 1024 }
 });
 
-// POST /upload-clip — saves file, responds immediately, then compresses in background.
-// IMPORTANT: we call clipUpload.single() manually (callback style) instead of using
-// it as middleware so that multer errors are caught here and returned as JSON.
-// When multer is used as Express middleware and throws, Express returns an HTML 500
-// page — which the client cannot JSON.parse, causing the "unexpected response" error.
 app.post('/upload-clip', (req, res) => {
-    clipUpload.single('clip')(req, res, (err) => {
-        if (err) {
-            console.error('Multer error:', err.message);
-            return res.status(400).json({ success: false, message: err.message || 'Upload error' });
-        }
+    clipUploadMW.single('clip')(req, res, async (err) => {
+        if (err) return res.status(400).json({ success: false, message: err.message });
+        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
         try {
-            if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+            // Strip extension for Cloudinary public_id (it adds its own)
+            const baseName = req.file.originalname.replace(/\.[^.]+$/, '');
 
-            // Respond NOW — do not make the user wait for ffmpeg
-            res.status(200).json({ success: true, filename: req.file.filename });
+            const uploadResult = await new Promise((resolve, reject) => {
+                const stream = cloudinary.uploader.upload_stream(
+                    {
+                        resource_type: 'video',
+                        folder: 'hatchat-clips',
+                        public_id: baseName,
+                        overwrite: false,
+                        // Cloudinary's built-in compression (equivalent to CRF 28)
+                        eager: [{ quality: 'auto', fetch_format: 'mp4' }],
+                        eager_async: true,
+                    },
+                    (error, result) => error ? reject(error) : resolve(result)
+                );
+                stream.end(req.file.buffer);
+            });
 
-            // Compress in background (fire and forget)
-            compressVideo(req.file.path).catch((e) => console.error('Compression error:', e));
-
+            res.status(200).json({
+                success: true,
+                filename: req.file.originalname,
+                url: uploadResult.secure_url,
+                public_id: uploadResult.public_id,
+            });
         } catch (error) {
-            console.error('Clip upload error:', error);
-            if (!res.headersSent) res.status(500).json({ success: false, message: 'Server error' });
+            console.error('Cloudinary upload error:', error);
+            res.status(500).json({ success: false, message: 'Upload to cloud failed: ' + error.message });
         }
     });
 });
 
-// GET /api/clips — returns a sorted list of all clip filenames
-// Sorted alphabetically = sorted by date because NVIDIA names are date-prefixed
-app.get('/api/clips', (req, res) => {
+// GET /api/clips — returns all clips from Cloudinary, newest first
+app.get('/api/clips', async (req, res) => {
     try {
-        const videoExts = /\.(mp4|webm|mov|avi)$/i;
-        const files = fs.readdirSync(CLIPS_DIR)
-            .filter(f => videoExts.test(f))
-            .sort()          // alphabetical order
-            .reverse();      // newest first (NVIDIA timestamps go oldest→newest alphabetically)
-        return res.json({ success: true, clips: files });
+        const result = await cloudinary.api.resources({
+            resource_type: 'video',
+            type: 'upload',
+            prefix: 'hatchat-clips/',
+            max_results: 200,
+        });
+        const clips = result.resources
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .map(r => ({
+                filename: path.basename(r.public_id) + '.' + r.format,
+                url: r.secure_url,
+                created_at: r.created_at,
+            }));
+        res.json({ success: true, clips });
     } catch (error) {
-        console.error('Clips list error:', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Cloudinary list error:', error);
+        res.status(500).json({ success: false, message: 'Could not list clips' });
     }
 });
 

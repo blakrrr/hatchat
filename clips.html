@@ -218,7 +218,7 @@
                     grid.innerHTML = '<div class="clips-empty">no clips yet — be the first to upload one</div>';
                     return;
                 }
-                data.clips.forEach(filename => grid.appendChild(buildClipCard(filename)));
+                data.clips.forEach(clip => grid.appendChild(buildClipCard(clip)));
 
             } catch (err) {
                 console.warn(`Clips load attempt ${attempt} failed:`, err.message);
@@ -231,39 +231,41 @@
         }
 
         // ── Build a single clip card ─────────────────────────────
-        // NVIDIA names look like: "Apex Legends 2024.03.15 - 14.30.22.03.mp4"
-        // We extract a human-readable date from that pattern if possible.
-        function buildClipCard(filename) {
+        function buildClipCard(clip) {
+            // clip = { filename, url, created_at }
+            const filename = clip.filename || clip; // fallback for old format
+            const url      = clip.url || `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
+
             const card = document.createElement('div');
             card.className = 'clip-card';
 
-            // Video element — lazy loading so we don't fetch all clips at once
             const video = document.createElement('video');
             video.controls = true;
-            video.preload  = 'metadata'; // only fetch enough to show thumbnail frame
-            video.src      = `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
+            video.preload  = 'metadata';
+            video.src      = url;
 
             const info = document.createElement('div');
             info.className = 'clip-card-info';
 
-            // Clean display name — strip extension
             const displayName = filename.replace(/\.[^.]+$/, '');
-
             const nameEl = document.createElement('p');
             nameEl.className   = 'clip-card-name';
             nameEl.textContent = displayName;
-            nameEl.title       = filename; // full name on hover
-
+            nameEl.title       = filename;
             info.appendChild(nameEl);
 
-            // Try to parse NVIDIA date from filename
-            // Pattern: YYYY.MM.DD - HH.MM.SS
+            // Parse date from NVIDIA filename or created_at
             const dateMatch = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
             if (dateMatch) {
                 const [, yr, mo, dy, hr, min] = dateMatch;
                 const dateEl = document.createElement('p');
                 dateEl.className   = 'clip-card-date';
                 dateEl.textContent = `${yr}-${mo}-${dy}  ${hr}:${min}`;
+                info.appendChild(dateEl);
+            } else if (clip.created_at) {
+                const dateEl = document.createElement('p');
+                dateEl.className   = 'clip-card-date';
+                dateEl.textContent = new Date(clip.created_at).toLocaleString();
                 info.appendChild(dateEl);
             }
 

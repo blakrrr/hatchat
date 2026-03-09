@@ -121,42 +121,44 @@ nav a:hover {
 
 .message {
     position: relative;
-    margin-bottom: 0;
-    padding: 0.05rem 2.5rem 0.05rem 1rem;
+    margin-bottom: 0.1rem;
+    padding: 0.1rem 2.5rem 0.1rem 0;
     max-width: 100%;
     word-wrap: break-word;
-    display: block;
+    display: flex;
+    align-items: baseline;
 }
 
-/* First message in a run gets a small top gap to breathe */
 .message:not(.continued-message) {
-    margin-top: 0.6rem;
+    margin-top: 0.35rem;
 }
 
 .username-area {
-    display: block;
+    width: 11ch;
+    min-width: 11ch;
+    text-align: right;
     font-size: 0.8rem;
-    color: #aaa;
-    margin-bottom: 0.1rem;
+    flex-shrink: 0;
 }
 
-/* Hide the username area entirely for continuation messages */
+/* Hide the username column for continuation messages */
 .continued-message .username-area {
-    display: none;
+    visibility: hidden;
 }
 
 .message-sender    { font-weight: bold; }
-.message-separator { margin: 0; }
+.message-separator { margin: 0; white-space: pre; }
 
 .message-content {
     display: block;
     word-break: break-word;
     white-space: normal;
-    padding-left: 0;
+    flex: 1;
+    padding-left: 0.5rem;
     min-width: 0;
 }
 
-.continued-message { margin-top: 0.05rem; padding-top: 0; }
+.continued-message { margin-top: 0.05rem; }
 
 /* timestamps removed */
 
