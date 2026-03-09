@@ -151,15 +151,6 @@ nav a:hover {
 .message-sender    { font-weight: bold; }
 .message-separator { margin: 0; white-space: pre; }
 
-.message-content {
-    display: block;
-    word-break: break-word;
-    white-space: normal;
-    flex: 1;
-    padding-left: 0.5rem;
-    min-width: 0;
-}
-
 .continued-message { margin-top: 0.05rem; }
 
 /* timestamps removed */
@@ -171,72 +162,63 @@ nav a:hover {
     color: #999;
 }
 
-/* ── Reply Button — REMOVED (click name to reply instead) ─────── */
+/* ── Reply Button — REMOVED (click message/name to reply) ─────── */
 
-/* ── Reply Thread: L-shaped line connecting reference to reply ──
-   Visual:
-     │  ave: original text...          ← .reply-ref (ghost line)
-     └─ reply text here                ← .reply-body
+/* ── Reply Thread: Reddit/GitHub comment style ───────────────────
+   The .reply-thread lives INSIDE .message-content (right column).
+   Its border-left IS the vertical bar. Everything is indented by
+   padding-left, which puts it cleanly to the right of the username
+   column — coming off the end of the message row, not the name.
 
-   --thread-color matches the quoted sender's color.
-───────────────────────────────────────────────────────────────── */
+   Row with a reply:
+     ave  ~  │ ave: original text...    ← .reply-ref (faded quote line)
+             │ perfect                  ← .reply-body (actual reply text)
+──────────────────────────────────────────────────────────────── */
 .reply-thread {
-    position: relative;
-    padding-left: 14px;
-    margin-top: 1px;
-    margin-bottom: 1px;
-}
-
-/* Vertical part of the L */
-.reply-thread::before {
-    content: '';
-    position: absolute;
-    left: 3px;
-    top: 2px;
-    bottom: 14px;
-    width: 2px;
-    background: var(--thread-color, #555);
-    border-radius: 1px;
-    opacity: 0.5;
-}
-
-/* Horizontal part of the L, hooking right into reply body */
-.reply-thread::after {
-    content: '';
-    position: absolute;
-    left: 3px;
-    bottom: 12px;
-    width: 10px;
-    height: 8px;
     border-left: 2px solid var(--thread-color, #555);
-    border-bottom: 2px solid var(--thread-color, #555);
-    border-radius: 0 0 0 3px;
-    opacity: 0.5;
+    padding-left: 8px;
+    margin-top: 0;
+    margin-left: 1px;
 }
 
+/* Faded quoted line: smaller, dimmer, truncated */
 .reply-ref {
-    font-size: 0.75em;
-    color: #555;
+    font-size: 0.72em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 400px;
-    margin-bottom: 2px;
+    max-width: 500px;
+    margin-bottom: 1px;
+    display: block;
+    opacity: 0.5;
 }
-
 .reply-ref-author {
     font-weight: bold;
 }
-
 .reply-ref-text {
-    color: #4a4a4a;
+    /* inherits color from .reply-ref opacity */
 }
 
+/* The actual reply content */
 .reply-body {
-    padding-bottom: 2px;
+    padding-bottom: 0;
 }
 
-/* Sender name becomes clickable to reply */
+/* Message content right column */
+.message-content {
+    display: block;
+    word-break: break-word;
+    white-space: normal;
+    flex: 1;
+    padding-left: 0.5rem;
+    min-width: 0;
+    border-radius: 3px;
+}
+.message-content:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+/* Sender name: underline on hover to hint it's clickable */
 .message-sender:hover {
     text-decoration: underline;
     opacity: 0.85;
@@ -546,6 +528,81 @@ body.clips-page {
     transition: width 0.3s;
 }
 
+/* ── Theater Mode Player ─────────────────────────────────────── */
+.clips-theater {
+    width: 100%;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #2a2a2a;
+    margin-bottom: 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.theater-video {
+    width: 100%;
+    max-height: 55vh;
+    display: block;
+    background: #000;
+    object-fit: contain;
+}
+
+.theater-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #0a0a0a;
+    padding: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+    border-top: 1px solid #1a1a1a;
+}
+
+.tc-btn {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: #aaa;
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: DejaVu Sans Mono, monospace;
+    flex-shrink: 0;
+}
+.tc-btn:hover  { background: #2a2a2a; color: #fff; }
+.tc-btn.active { background: #2e5e2e; border-color: #4a8a4a; color: #9fd49f; }
+
+.tc-seek {
+    flex: 1;
+    min-width: 60px;
+    accent-color: #7c6af7;
+    cursor: pointer;
+}
+
+.tc-vol {
+    width: 60px;
+    accent-color: #7c6af7;
+    cursor: pointer;
+}
+
+.tc-time {
+    font-size: 0.72rem;
+    color: #666;
+    white-space: nowrap;
+    font-family: DejaVu Sans Mono, monospace;
+}
+
+.tc-title {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
+    margin-left: auto;
+}
+
 /* ── Clips tab bar ───────────────────────────────────────────── */
 .clips-tab-bar {
     display: flex;
@@ -569,8 +626,10 @@ body.clips-page {
     margin-bottom: -1px;
 }
 .clips-tab:hover  { color: #aaa; }
-.clips-tab.active { color: #e0e0e0; border-bottom-color: #e0e0e0; }
+.clips-tab.active { color: #e0e0e0; border-bottom-color: currentColor; }
 .clips-tab-users  { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+/* User tabs: active border uses the tab's own text color (set by JS) */
+.clips-tab-users .clips-tab.active { border-bottom-color: currentColor; }
 
 /* ── Player bar ──────────────────────────────────────────────── */
 .clips-player-bar {
@@ -649,17 +708,38 @@ body.clips-page {
     border: 1px solid #2a2a2a;
     border-radius: 8px;
     overflow: hidden;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, transform 0.1s;
+    cursor: pointer;
 }
-.clip-card:hover { border-color: #444; }
+.clip-card:hover { border-color: #555; transform: translateY(-2px); }
 
-.clip-card video {
+/* Thumbnail container with play overlay */
+.clip-thumb {
+    position: relative;
     width: 100%;
-    display: block;
-    background-color: #000;
-    max-height: 180px;
-    object-fit: contain;
+    aspect-ratio: 16/9;
+    background: #000;
+    overflow: hidden;
 }
+.clip-thumb video {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    pointer-events: none;
+}
+.clip-play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.3);
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: pointer;
+}
+.clip-thumb:hover .clip-play-overlay { opacity: 1; }
 
 .clip-card-info { padding: 0.5rem 0.7rem 0.6rem; }
 
@@ -669,8 +749,10 @@ body.clips-page {
     margin: 0;
 }
 .clip-card-uploader {
-    font-size: 0.7rem; color: #777;
+    font-size: 0.7rem;
+    /* color set dynamically per-user by JS */
     margin: 0.15rem 0 0;
+    font-weight: bold;
 }
 .clip-card-date {
     font-size: 0.68rem; color: #555;

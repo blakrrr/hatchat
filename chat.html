@@ -380,8 +380,16 @@
     }
 
     // ── createMessageElement ──────────────────────────────────────────────
-    // Reply style: instead of an inline quote block, we render an L-shaped
-    // thread line connecting the original-message reference to the reply.
+    // Reply visual: Reddit/GitHub style — a vertical colored bar on the LEFT
+    // of a block that sits INSIDE .message-content (the right column).
+    // This means the bar + indented text comes off the END of the row, not
+    // off the username column on the left.
+    //
+    // Row layout:
+    //   ave  ~  │ ave: original text...   ← .reply-ref (faded)
+    //           │ perfect                 ← .reply-body
+    //
+    // Click anywhere on a message (text OR name) to reply.
     function createMessageElement(sender, message, timestamp,
                                   isContinuation=false, color, image=null, replyTo=null) {
         const messageDiv = document.createElement('div');
@@ -392,7 +400,7 @@
 
         const msgColor = color || userColors[sender] || null;
 
-        // Username area — clicking it sets a reply
+        // Left column: username
         const usernameArea = document.createElement('div');
         usernameArea.className = 'username-area';
         const senderEl = document.createElement('span');
@@ -400,9 +408,9 @@
         senderEl.setAttribute('data-sender', sender);
         senderEl.textContent = sender;
         if (msgColor) senderEl.style.color = msgColor;
-        // Click name → reply
         senderEl.style.cursor = 'pointer';
-        senderEl.addEventListener('click', () => {
+        senderEl.addEventListener('click', (e) => {
+            e.stopPropagation();
             setReply({ username: sender, message: message || '', color: msgColor });
         });
         const sep = document.createElement('span');
@@ -411,20 +419,25 @@
         usernameArea.appendChild(senderEl);
         usernameArea.appendChild(sep);
 
+        // Right column: message content — clicking triggers reply
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
         if (msgColor) messageContent.style.color = msgColor;
+        messageContent.style.cursor = 'pointer';
+        messageContent.title = 'Click to reply';
+        messageContent.addEventListener('click', () => {
+            setReply({ username: sender, message: message || '', color: msgColor });
+        });
 
         if (replyTo) {
-            // L-line thread: a thin vertical + horizontal line drawn via CSS
-            // on the .reply-thread container, pointing from the quoted context
-            // down-and-right to the reply text.
             const replyLineColor = replyTo.color || userColors[replyTo.username] || '#555';
+
+            // .reply-thread is the bordered block — border-left IS the vertical bar
             const thread = document.createElement('div');
             thread.className = 'reply-thread';
             thread.style.setProperty('--thread-color', replyLineColor);
 
-            // Small "ghost" reference line showing who was replied to
+            // Faded quote line: "ave: original text..."
             const refLine = document.createElement('div');
             refLine.className = 'reply-ref';
             const refAuthor = document.createElement('span');
@@ -434,11 +447,11 @@
             const refText = document.createElement('span');
             refText.className = 'reply-ref-text';
             const raw = replyTo.message || '[image]';
-            refText.textContent = raw.length > 60 ? raw.substring(0,60)+'…' : raw;
+            refText.textContent = ': ' + (raw.length > 55 ? raw.substring(0,55)+'…' : raw);
             refLine.appendChild(refAuthor);
-            refLine.appendChild(document.createTextNode(': '));
             refLine.appendChild(refText);
 
+            // Actual reply text / image
             const replyBody = document.createElement('div');
             replyBody.className = 'reply-body';
             if (msgColor) replyBody.style.color = msgColor;
@@ -447,10 +460,11 @@
                 const img = document.createElement('img');
                 img.src = image; img.className = 'message-image'; img.alt = 'Shared image';
                 img.onerror = () => { img.alt = 'Image failed to load'; };
-                img.addEventListener('click', () => window.open(image, '_blank'));
+                img.addEventListener('click', (e) => { e.stopPropagation(); window.open(image, '_blank'); });
                 if (message && message.length > 0) replyBody.appendChild(document.createElement('br'));
                 replyBody.appendChild(img);
             }
+
             thread.appendChild(refLine);
             thread.appendChild(replyBody);
             messageContent.appendChild(thread);
@@ -460,7 +474,7 @@
                 const img = document.createElement('img');
                 img.src = image; img.className = 'message-image'; img.alt = 'Shared image';
                 img.onerror = () => { img.alt = 'Image failed to load'; };
-                img.addEventListener('click', () => window.open(image, '_blank'));
+                img.addEventListener('click', (e) => { e.stopPropagation(); window.open(image, '_blank'); });
                 if (message && message.length > 0) messageContent.appendChild(document.createElement('br'));
                 messageContent.appendChild(img);
             }
