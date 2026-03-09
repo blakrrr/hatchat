@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hatchat - Clips</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="clips-page">
+    <header>
+        <div class="logo">hatchat - 1.0.0.7</div>
+        <nav>
+            <ul>
+                <li><a href="clips.html">clips</a></li>
+                <li><a href="index.html">homepage</a></li>
+                <li><a href="chat.html">hatchat</a></li>
+                <li><a href="settings.html">settings</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <div class="clips-main">
+
+        <!-- Status message (success / error feedback) -->
+        <div id="clips-status" class="clips-status-msg"></div>
+
+        <!-- ── Upload Section ─────────────────────────────────── -->
+        <div class="clips-upload-section" id="drop-zone">
+            <h2>upload a clip</h2>
+            <p>mp4 · webm · mov &nbsp;|&nbsp; max 500 MB &nbsp;|&nbsp; drag & drop or browse</p>
+
+            <label class="clip-upload-label" for="clip-file-input">choose file</label>
+            <input type="file" id="clip-file-input" class="clip-file-input"
+                   accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov">
+            <button class="clip-submit-btn" id="clip-submit-btn" disabled>upload</button>
+
+            <span class="clip-selected-name" id="clip-selected-name">no file selected</span>
+
+            <!-- Progress bar shown during upload -->
+            <div class="clip-upload-progress" id="clip-upload-progress">
+                <span id="clip-progress-label">uploading...</span>
+                <div class="clip-progress-bar-wrap">
+                    <div class="clip-progress-bar" id="clip-progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Clips Grid ──────────────────────────────────────── -->
+        <div class="clips-grid-section">
+            <h2>all clips</h2>
+            <div class="clips-grid" id="clips-grid">
+                <div class="clips-empty" id="clips-empty">loading clips...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ── Config ──────────────────────────────────────────────
+        const SERVER = 'https://averrgy-github-io.onrender.com';
+
+        // ── Elements ────────────────────────────────────────────
+        const fileInput      = document.getElementById('clip-file-input');
+        const submitBtn      = document.getElementById('clip-submit-btn');
+        const selectedName   = document.getElementById('clip-selected-name');
+        const dropZone       = document.getElementById('drop-zone');
+        const progressWrap   = document.getElementById('clip-upload-progress');
+        const progressBar    = document.getElementById('clip-progress-bar');
+        const progressLabel  = document.getElementById('clip-progress-label');
+        const grid           = document.getElementById('clips-grid');
+        const emptyMsg       = document.getElementById('clips-empty');
+        const statusMsg      = document.getElementById('clips-status');
+
+        let selectedFile = null;
+
+        // ── File selection via input ────────────────────────────
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) selectFile(file);
+        });
+
+        function selectFile(file) {
+            // Validate type
+            const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
+            if (!allowed.includes(file.type) && !file.name.match(/\.(mp4|webm|mov)$/i)) {
+                showStatus('Only mp4, webm, and mov files are allowed.', 'error');
+                return;
+            }
+            // Validate size (500 MB)
+            if (file.size > 500 * 1024 * 1024) {
+                showStatus('File is too large. Max size is 500 MB.', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            selectedName.textContent = file.name;
+            submitBtn.disabled = false;
+        }
+
+        // ── Drag & Drop ─────────────────────────────────────────
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) selectFile(file);
+        });
+
+        // ── Upload ───────────────────────────────────────────────
+        // We use XMLHttpRequest (not fetch) so we can track upload progress.
+        submitBtn.addEventListener('click', () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('clip', selectedFile);
+
+            const xhr = new XMLHttpRequest();
+
+            // Show progress bar
+            progressWrap.style.display = 'block';
+            submitBtn.disabled = true;
+            progressBar.style.width = '0%';
+            progressLabel.textContent = 'uploading...';
+
+            // Track progress
+            // xhr.upload.onprogress fires as bytes are sent to the server.
+            // We calculate percentage and widen the green bar accordingly.
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressLabel.textContent = `uploading... ${pct}%`;
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                progressWrap.style.display = 'none';
+                selectedFile = null;
+                selectedName.textContent = 'no file selected';
+                fileInput.value = '';
+                submitBtn.disabled = true;
+
+                try {
+                    const result = JSON.parse(xhr.responseText);
+                    if (result.success) {
+                        showStatus('Clip uploaded successfully!', 'success');
+                        loadClips(); // refresh grid
+                    } else {
+                        showStatus('Upload failed: ' + (result.message || 'unknown error'), 'error');
+                    }
+                } catch {
+                    showStatus('Upload failed: server returned an unexpected response.', 'error');
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                progressWrap.style.display = 'none';
+                submitBtn.disabled = false;
+                showStatus('Upload failed: network error.', 'error');
+            });
+
+            xhr.open('POST', `${SERVER}/upload-clip`);
+            xhr.send(formData);
+        });
+
+        // ── Load Clips ───────────────────────────────────────────
+        // GET /clips returns { clips: [ "filename.mp4", ... ] }
+        // Already sorted newest-first by the server (alphabetical reversed).
+        async function loadClips() {
+            try {
+                const res  = await fetch(`${SERVER}/clips`);
+                const data = await res.json();
+
+                grid.innerHTML = '';
+
+                if (!data.clips || data.clips.length === 0) {
+                    grid.innerHTML = '<div class="clips-empty">no clips yet — be the first to upload one</div>';
+                    return;
+                }
+
+                data.clips.forEach(filename => {
+                    const card = buildClipCard(filename);
+                    grid.appendChild(card);
+                });
+
+            } catch (err) {
+                console.error('Failed to load clips:', err);
+                grid.innerHTML = '<div class="clips-empty">could not load clips — server may be offline</div>';
+            }
+        }
+
+        // ── Build a single clip card ─────────────────────────────
+        // NVIDIA names look like: "Apex Legends 2024.03.15 - 14.30.22.03.mp4"
+        // We extract a human-readable date from that pattern if possible.
+        function buildClipCard(filename) {
+            const card = document.createElement('div');
+            card.className = 'clip-card';
+
+            // Video element — lazy loading so we don't fetch all clips at once
+            const video = document.createElement('video');
+            video.controls = true;
+            video.preload  = 'metadata'; // only fetch enough to show thumbnail frame
+            video.src      = `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
+
+            const info = document.createElement('div');
+            info.className = 'clip-card-info';
+
+            // Clean display name — strip extension
+            const displayName = filename.replace(/\.[^.]+$/, '');
+
+            const nameEl = document.createElement('p');
+            nameEl.className   = 'clip-card-name';
+            nameEl.textContent = displayName;
+            nameEl.title       = filename; // full name on hover
+
+            info.appendChild(nameEl);
+
+            // Try to parse NVIDIA date from filename
+            // Pattern: YYYY.MM.DD - HH.MM.SS
+            const dateMatch = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
+            if (dateMatch) {
+                const [, yr, mo, dy, hr, min] = dateMatch;
+                const dateEl = document.createElement('p');
+                dateEl.className   = 'clip-card-date';
+                dateEl.textContent = `${yr}-${mo}-${dy}  ${hr}:${min}`;
+                info.appendChild(dateEl);
+            }
+
+            card.appendChild(video);
+            card.appendChild(info);
+            return card;
+        }
+
+        // ── Status message helper ────────────────────────────────
+        function showStatus(msg, type) {
+            statusMsg.textContent = msg;
+            statusMsg.className   = `clips-status-msg ${type}`;
+            clearTimeout(statusMsg._timer);
+            statusMsg._timer = setTimeout(() => {
+                statusMsg.className = 'clips-status-msg';
+            }, 6000);
+        }
+
+        // ── Init ─────────────────────────────────────────────────
+        loadClips();
+    </script>
+</body>
+</html>
