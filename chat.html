@@ -42,7 +42,7 @@
             </div>
 
             <div class="chat-messages" id="chat-messages">
-                <div class="loading-indicator" id="loading-indicator">Loading messages...</div>
+                <div class="loading-indicator" id="loading-indicator"></div>
             </div>
 
             <!-- Reply preview bar — hidden until a user clicks ↩ on a message -->
@@ -398,6 +398,7 @@
     function loadMessages(page) {
         if (isLoading) return;
         isLoading = true;
+        loadingIndicator.textContent = 'Loading messages...';
         loadingIndicator.style.display = 'flex';
         socket.emit('load_messages', { page });
     }

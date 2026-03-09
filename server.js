@@ -75,7 +75,10 @@ app.use(express.static(path.join(__dirname)));
 
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: {
+        origin: ["https://hatchat.blakrr.works", "http://hatchat.blakrr.works", "*"],
+        methods: ["GET", "POST"]
+    }
 });
 
 // ─── IMAGE UPLOAD (existing) ───────────────────────────────────────────────
