@@ -155,7 +155,9 @@
                         showStatus('Upload failed: ' + (result.message || 'unknown error'), 'error');
                     }
                 } catch {
-                    showStatus('Upload failed: server returned an unexpected response.', 'error');
+                    // Server is probably still waking up — the response was HTML not JSON.
+                    // Tell the user to wait a moment and try again.
+                    showStatus('Upload failed: server is waking up. Wait ~30s then try again.', 'error');
                 }
             });
 
@@ -170,12 +172,33 @@
         });
 
         // ── Load Clips ───────────────────────────────────────────
-        // GET /clips returns { clips: [ "filename.mp4", ... ] }
-        // Already sorted newest-first by the server (alphabetical reversed).
-        async function loadClips() {
+        // Render free tier sleeps after 15 min of inactivity.
+        // When asleep, the first request gets an HTML wake-up page (not JSON)
+        // which crashes JSON.parse. We retry up to 5 times with a 6s gap,
+        // showing a "waking server up..." message so the user knows to wait.
+        async function loadClips(attempt = 1) {
+            const MAX = 5;
+            const RETRY_MS = 6000;
+
+            // Show a helpful status while we wait
+            if (attempt === 1) {
+                grid.innerHTML = '<div class="clips-empty">loading clips...</div>';
+            } else {
+                grid.innerHTML = `<div class="clips-empty">waking server up... (attempt ${attempt}/${MAX})</div>`;
+            }
+
             try {
                 const res  = await fetch(`${SERVER}/clips`);
-                const data = await res.json();
+                const text = await res.text();
+
+                // If Render returns an HTML wake page, text won't parse as JSON.
+                // Detect that and retry.
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    throw new Error('Server returned non-JSON (probably still waking up)');
+                }
 
                 grid.innerHTML = '';
 
@@ -190,8 +213,12 @@
                 });
 
             } catch (err) {
-                console.error('Failed to load clips:', err);
-                grid.innerHTML = '<div class="clips-empty">could not load clips — server may be offline</div>';
+                console.warn(`Clips load attempt ${attempt} failed:`, err.message);
+                if (attempt < MAX) {
+                    setTimeout(() => loadClips(attempt + 1), RETRY_MS);
+                } else {
+                    grid.innerHTML = '<div class="clips-empty">could not reach server — try refreshing in a minute</div>';
+                }
             }
         }
 
