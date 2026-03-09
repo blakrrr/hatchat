@@ -15,14 +15,8 @@
             color: #e0e0e0;
             margin: 0;
         }
-        .container {
-            text-align: center;
-        }
-        .logo {
-            font-size: 3rem;
-            font-weight: bold;
-            margin-bottom: 2rem;
-        }
+        .container { text-align: center; }
+        .logo { font-size: 3rem; font-weight: bold; margin-bottom: 2rem; }
         .chat-button {
             padding: 1rem 2rem;
             background-color: #333;
@@ -33,12 +27,21 @@
             font-size: 1.2rem;
             transition: background-color 0.3s;
         }
-        .chat-button:hover {
-            background-color: #555;
-        }
+        .chat-button:hover { background-color: #555; }
     </style>
 </head>
 <body>
+    <header>
+        <div class="logo">hatchat - 1.0.0.7</div>
+        <nav>
+            <ul>
+                <li><a href="clips.html">clips</a></li>
+                <li><a href="index.html">homepage</a></li>
+                <li><a href="chat.html">hatchat</a></li>
+                <li><a href="settings.html">settings</a></li>
+            </ul>
+        </nav>
+    </header>
     <div class="container">
         <div class="logo">hatchat - 1.0.0.7</div>
         <button class="chat-button" onclick="window.location.href='chat.html'">Enter Chat</button>
