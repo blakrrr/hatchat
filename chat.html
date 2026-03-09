@@ -763,6 +763,11 @@
     document.addEventListener('visibilitychange', () => {});
 
     // ── Voice Chat (WebRTC via Socket.IO signalling) ──────────────────
+    // Requires HTTPS for microphone access. If the page is on HTTP,
+    // redirect to HTTPS automatically.
+    if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+        location.replace('https:' + location.href.substring(5));
+    }
     (function() {
         const joinBtn     = document.getElementById('voice-join-btn');
         const membersEl   = document.getElementById('voice-members');

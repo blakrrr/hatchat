@@ -88,7 +88,7 @@ const clipUploadMW = multer({
 
 // POST /upload-clip — supports multiple files (field name "clips[]")
 app.post('/upload-clip', (req, res) => {
-    clipUploadMW.array('clips[]', 20)(req, res, async (err) => {
+    clipUploadMW.array('clips', 20)(req, res, async (err) => {
         if (err) return res.status(400).json({ success: false, message: err.message });
         const files = req.files;
         if (!files || files.length === 0) return res.status(400).json({ success: false, message: 'No files uploaded' });
@@ -140,6 +140,28 @@ app.post('/upload-clip', (req, res) => {
             res.status(500).json({ success: false, message: 'Upload to cloud failed: ' + error.message });
         }
     });
+});
+
+// DELETE /api/clips/purge-unknown — removes all clips tagged uploader:unknown
+// One-time cleanup endpoint; can be called from browser console
+app.delete('/api/clips/purge-unknown', async (req, res) => {
+    try {
+        const result = await cloudinary.api.resources({
+            resource_type: 'video', type: 'upload',
+            prefix: 'hatchat-clips/', max_results: 200,
+            context: true, tags: true,
+        });
+        const toDelete = result.resources.filter(r => {
+            let uploader = 'unknown';
+            if (r.context?.custom?.uploader) uploader = r.context.custom.uploader;
+            else if (r.tags) { const t = r.tags.find(t => t.startsWith('uploader:')); if (t) uploader = t.replace('uploader:', ''); }
+            return uploader === 'unknown';
+        });
+        for (const r of toDelete) {
+            await cloudinary.uploader.destroy(r.public_id, { resource_type: 'video' });
+        }
+        res.json({ success: true, deleted: toDelete.length });
+    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 // DELETE /api/clips/:public_id — only the original uploader can delete their clip

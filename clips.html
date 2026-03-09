@@ -20,18 +20,15 @@
     <div class="clips-main">
         <div id="clips-status" class="clips-status-msg"></div>
 
-        <!-- ── Upload Section ─────────────────────────────── -->
+        <!-- Upload Section -->
         <div class="clips-upload-section" id="drop-zone">
             <h2>upload a clip</h2>
-            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB per file &nbsp;|&nbsp; 30s max &nbsp;|&nbsp; drag & drop or browse</p>
-
+            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB per file &nbsp;|&nbsp; trimmed to 30s &nbsp;|&nbsp; drag & drop or browse</p>
             <label class="clip-upload-label" for="clip-file-input">choose files</label>
             <input type="file" id="clip-file-input" class="clip-file-input"
                    accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
             <button class="clip-submit-btn" id="clip-submit-btn" disabled>upload</button>
-
             <span class="clip-selected-name" id="clip-selected-name">no files selected</span>
-
             <div class="clip-upload-progress" id="clip-upload-progress">
                 <span id="clip-progress-label">uploading...</span>
                 <div class="clip-progress-bar-wrap">
@@ -40,11 +37,21 @@
             </div>
         </div>
 
-        <!-- ── Clips Grid ──────────────────────────────────── -->
+        <!-- Tab Bar -->
+        <div class="clips-tab-bar">
+            <button class="clips-tab active" id="tab-all" onclick="switchTab('all')">all clips</button>
+            <div class="clips-tab-users" id="tab-users"><!-- user tabs injected here --></div>
+        </div>
+
+        <!-- Clips Area -->
         <div class="clips-grid-section">
-            <h2>all clips</h2>
-            <div class="clips-grid" id="clips-grid">
-                <div class="clips-empty" id="clips-empty">loading clips...</div>
+            <div id="clips-all-view">
+                <div class="clips-grid" id="clips-grid-all">
+                    <div class="clips-empty">loading clips...</div>
+                </div>
+            </div>
+            <div id="clips-user-view" style="display:none">
+                <div class="clips-grid" id="clips-grid-user"></div>
             </div>
         </div>
     </div>
@@ -60,38 +67,65 @@
     const progressWrap  = document.getElementById('clip-upload-progress');
     const progressBar   = document.getElementById('clip-progress-bar');
     const progressLabel = document.getElementById('clip-progress-label');
-    const grid          = document.getElementById('clips-grid');
     const statusMsg     = document.getElementById('clips-status');
 
     let selectedFiles = [];
+    let allClipsData  = [];   // cache for tab switching
+    let activeTab     = 'all';
+
+    // ── Tab switching ────────────────────────────────────────
+    function switchTab(tab) {
+        activeTab = tab;
+        document.querySelectorAll('.clips-tab').forEach(b => b.classList.remove('active'));
+        if (tab === 'all') {
+            document.getElementById('tab-all').classList.add('active');
+            document.getElementById('clips-all-view').style.display = '';
+            document.getElementById('clips-user-view').style.display = 'none';
+        } else {
+            document.querySelector(`.clips-tab[data-user="${tab}"]`)?.classList.add('active');
+            document.getElementById('clips-all-view').style.display = 'none';
+            document.getElementById('clips-user-view').style.display = '';
+            renderUserGrid(tab);
+        }
+    }
+
+    function renderUserGrid(user) {
+        const grid = document.getElementById('clips-grid-user');
+        grid.innerHTML = '';
+        const clips = allClipsData.filter(c => (c.uploader || 'unknown') === user);
+        clips.forEach(c => grid.appendChild(buildClipCard(c)));
+    }
+
+    function buildTabBar(groups) {
+        const tabUsers = document.getElementById('tab-users');
+        tabUsers.innerHTML = '';
+        Object.keys(groups).sort().forEach(user => {
+            const btn = document.createElement('button');
+            btn.className   = 'clips-tab';
+            btn.dataset.user = user;
+            btn.textContent = user;
+            btn.onclick = () => switchTab(user);
+            tabUsers.appendChild(btn);
+        });
+    }
 
     // ── File selection ───────────────────────────────────────
     fileInput.addEventListener('change', () => selectFiles([...fileInput.files]));
 
     function selectFiles(files) {
-        const MAX = 50 * 1024 * 1024;
+        const MAX    = 50 * 1024 * 1024;
         const NVIDIA = /\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
-        const allowed = [];
-        const rejected = [];
-
+        const allowed = [], rejected = [];
         files.forEach(f => {
-            if (!NVIDIA.test(f.name)) {
-                rejected.push(`${f.name} — not an NVIDIA clip (no date in filename)`);
-            } else if (f.size > MAX) {
-                rejected.push(`${f.name} — too large (max 50 MB)`);
-            } else {
-                allowed.push(f);
-            }
+            if (!NVIDIA.test(f.name))       rejected.push(`${f.name} — not an NVIDIA clip`);
+            else if (f.size > MAX)          rejected.push(`${f.name} — over 50 MB`);
+            else                            allowed.push(f);
         });
-
         if (rejected.length) showStatus('Rejected: ' + rejected.join(' | '), 'error');
-        if (allowed.length === 0) { submitBtn.disabled = true; return; }
-
         selectedFiles = allowed;
-        selectedName.textContent = allowed.length === 1
-            ? allowed[0].name
-            : `${allowed.length} files selected`;
-        submitBtn.disabled = false;
+        selectedName.textContent = allowed.length === 0 ? 'no files selected'
+            : allowed.length === 1 ? allowed[0].name : `${allowed.length} files selected`;
+        submitBtn.disabled = allowed.length === 0;
     }
 
     // ── Drag & Drop ──────────────────────────────────────────
@@ -102,14 +136,14 @@
         selectFiles([...e.dataTransfer.files]);
     });
 
-    // ── Upload (all files in one request) ───────────────────
+    // ── Upload ───────────────────────────────────────────────
     submitBtn.addEventListener('click', () => {
         if (!selectedFiles.length) return;
-        if (!username) return showStatus('You must be logged in to upload clips. Open hatchat first.', 'error');
+        if (!username) return showStatus('Open hatchat first to set your username.', 'error');
 
         const formData = new FormData();
         formData.append('uploader', username);
-        selectedFiles.forEach(f => formData.append('clips[]', f));
+        selectedFiles.forEach(f => formData.append('clips', f));
 
         const xhr = new XMLHttpRequest();
         progressWrap.style.display = 'block';
@@ -132,18 +166,15 @@
             try {
                 const r = JSON.parse(xhr.responseText);
                 if (r.success) {
-                    const errMsg = r.errors && r.errors.length
-                        ? ` (${r.errors.length} failed: ${r.errors.map(e=>e.filename).join(', ')})`
-                        : '';
-                    showStatus(`${r.uploaded.length} clip(s) uploaded!${errMsg}`, r.errors?.length ? 'error' : 'success');
+                    const errMsg = r.errors?.length ? ` (${r.errors.length} failed)` : '';
+                    showStatus(`${r.uploaded.length} clip(s) uploaded!${errMsg}`,
+                               r.errors?.length ? 'error' : 'success');
                     loadClips();
                 } else {
                     showStatus('Upload failed: ' + (r.message || 'unknown error'), 'error');
                 }
             } catch {
-                const c = xhr.status;
-                showStatus(c === 404 ? 'Upload failed: route missing, redeploy Render.'
-                    : `Upload failed: HTTP ${c}`, 'error');
+                showStatus(`Upload failed: HTTP ${xhr.status}`, 'error');
             }
         });
 
@@ -160,49 +191,59 @@
     // ── Load Clips ───────────────────────────────────────────
     async function loadClips(attempt = 1) {
         const MAX = 10, RETRY = 8000;
+        const grid = document.getElementById('clips-grid-all');
         if (attempt === 1) grid.innerHTML = '<div class="clips-empty">loading clips...</div>';
         else grid.innerHTML = `<div class="clips-empty">waking server... (${attempt}/${MAX})</div>`;
 
         try {
             const ctrl = new AbortController();
             const t = setTimeout(() => ctrl.abort(), 7000);
-            const res = await fetch(`${SERVER}/api/clips`, { signal: ctrl.signal });
+            const res  = await fetch(`${SERVER}/api/clips`, { signal: ctrl.signal });
             clearTimeout(t);
             const data = JSON.parse(await res.text());
 
+            allClipsData = data.clips || [];
             grid.innerHTML = '';
-            if (!data.clips || data.clips.length === 0) {
-                grid.innerHTML = '<div class="clips-empty">no clips yet</div>'; return;
+
+            if (allClipsData.length === 0) {
+                grid.innerHTML = '<div class="clips-empty">no clips yet</div>';
+                buildTabBar({});
+                return;
             }
 
-            // Group by uploader
+            // Group by uploader for tabs
             const groups = {};
-            data.clips.forEach(clip => {
-                const u = clip.uploader || 'unknown';
+            allClipsData.forEach(c => {
+                const u = c.uploader || 'unknown';
                 if (!groups[u]) groups[u] = [];
-                groups[u].push(clip);
+                groups[u].push(c);
             });
 
-            Object.keys(groups).sort().forEach(uploader => {
+            buildTabBar(groups);
+
+            // "All clips" view: one horizontal row per uploader
+            Object.keys(groups).sort().forEach(user => {
                 const section = document.createElement('div');
                 section.className = 'clips-user-section';
-
                 const heading = document.createElement('h3');
-                heading.className = 'clips-user-heading';
-                heading.textContent = uploader;
-                section.appendChild(heading);
-
+                heading.className   = 'clips-user-heading';
+                heading.textContent = user;
                 const row = document.createElement('div');
                 row.className = 'clips-user-row';
-                groups[uploader].forEach(clip => row.appendChild(buildClipCard(clip)));
+                groups[user].forEach(c => row.appendChild(buildClipCard(c)));
+                section.appendChild(heading);
                 section.appendChild(row);
                 grid.appendChild(section);
             });
 
+            // Re-render active user tab if we're on one
+            if (activeTab !== 'all') renderUserGrid(activeTab);
+
         } catch (e) {
-            console.warn(`Clips load attempt ${attempt} failed:`, e.message);
+            console.warn(`Attempt ${attempt} failed:`, e.message);
             if (attempt < MAX) setTimeout(() => loadClips(attempt + 1), RETRY);
-            else grid.innerHTML = '<div class="clips-empty">server took too long to wake up — try refreshing</div>';
+            else document.getElementById('clips-grid-all').innerHTML =
+                '<div class="clips-empty">server took too long to wake up — refresh</div>';
         }
     }
 
@@ -210,8 +251,7 @@
     function buildClipCard(clip) {
         const filename = clip.filename || clip;
         const url      = clip.url || `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
-
-        const card = document.createElement('div');
+        const card     = document.createElement('div');
         card.className = 'clip-card';
 
         const video = document.createElement('video');
@@ -229,31 +269,31 @@
         const dateMatch = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
         if (dateMatch) {
             const [, yr, mo, dy, hr, min] = dateMatch;
-            const dateEl = document.createElement('p');
-            dateEl.className = 'clip-card-date';
-            dateEl.textContent = `${yr}-${mo}-${dy}  ${hr}:${min}`;
-            info.appendChild(dateEl);
+            const d = document.createElement('p');
+            d.className = 'clip-card-date';
+            d.textContent = `${yr}-${mo}-${dy}  ${hr}:${min}`;
+            info.appendChild(d);
         } else if (clip.created_at) {
-            const dateEl = document.createElement('p');
-            dateEl.className = 'clip-card-date';
-            dateEl.textContent = new Date(clip.created_at).toLocaleString();
-            info.appendChild(dateEl);
+            const d = document.createElement('p');
+            d.className = 'clip-card-date';
+            d.textContent = new Date(clip.created_at).toLocaleString();
+            info.appendChild(d);
         }
 
-        // Delete button — only shown if this is the uploader
+        // Delete button — only shown to the uploader
         if (username && clip.uploader &&
             username.toLowerCase() === clip.uploader.toLowerCase() && clip.public_id) {
             const delBtn = document.createElement('button');
-            delBtn.className = 'clip-delete-btn';
+            delBtn.className   = 'clip-delete-btn';
             delBtn.textContent = '✕ delete';
             delBtn.addEventListener('click', async () => {
                 if (!confirm(`Delete "${displayName}"?`)) return;
                 try {
-                    const r = await fetch(`${SERVER}/api/clips/${encodeURIComponent(clip.public_id)}`, {
-                        method: 'DELETE',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ uploader: username }),
-                    });
+                    const r = await fetch(
+                        `${SERVER}/api/clips/${encodeURIComponent(clip.public_id)}`,
+                        { method: 'DELETE', headers: {'Content-Type':'application/json'},
+                          body: JSON.stringify({ uploader: username }) }
+                    );
                     const d = await r.json();
                     if (d.success) { showStatus('Clip deleted.', 'success'); loadClips(); }
                     else showStatus('Delete failed: ' + d.message, 'error');
@@ -270,7 +310,7 @@
     // ── Status helper ────────────────────────────────────────
     function showStatus(msg, type) {
         statusMsg.textContent = msg;
-        statusMsg.className = `clips-status-msg ${type}`;
+        statusMsg.className   = `clips-status-msg ${type}`;
         clearTimeout(statusMsg._timer);
         statusMsg._timer = setTimeout(() => { statusMsg.className = 'clips-status-msg'; }, 7000);
     }

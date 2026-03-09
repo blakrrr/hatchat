@@ -590,6 +590,39 @@ body.clips-page {
     transition: width 0.3s;
 }
 
+/* ── Clips tab bar ───────────────────────────────────────────── */
+.clips-tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-bottom: 1px solid #2a2a2a;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0;
+    flex-wrap: wrap;
+}
+
+.clips-tab {
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem;
+    font-family: DejaVu Sans Mono, monospace;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: 2px solid transparent;
+    color: #666;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+}
+.clips-tab:hover  { color: #aaa; }
+.clips-tab.active { color: #e0e0e0; border-bottom-color: #e0e0e0; }
+
+.clips-tab-users {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
 /* ── Clips grid ──────────────────────────────────────────────── */
 .clips-grid-section h2 {
     margin-bottom: 1rem;
