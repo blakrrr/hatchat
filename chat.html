@@ -638,8 +638,22 @@
 
     // ── Display a new incoming message ────────────────────────────────────
     function displayMessage(sender, message, timestamp, color, image = null, replyTo = null) {
-        // A reply always shows the sender name; system messages reset the run
-        const isContinuation = !replyTo && (sender === lastMessageSender);
+        // Derive the last real sender directly from the DOM so we don't rely on
+        // the stale lastMessageSender variable (which can be wrong after system
+        // messages arrive out of order relative to chat_history).
+        let lastDOMSender = null;
+        const allMessages = chatMessages.querySelectorAll('.message:not(.system-message)');
+        if (allMessages.length > 0) {
+            const lastEl = allMessages[allMessages.length - 1];
+            const sEl = lastEl.querySelector('.message-sender');
+            if (sEl) lastDOMSender = sEl.getAttribute('data-sender');
+        }
+        // Also check if the very last child (including system messages) is a system message,
+        // which always breaks a continuation run.
+        const lastChild = chatMessages.lastElementChild;
+        const lastIsSystem = lastChild && lastChild.classList.contains('system-message');
+
+        const isContinuation = !replyTo && !lastIsSystem && (lastDOMSender === sender);
         const el = createMessageElement(sender, message, timestamp,
                                         isContinuation, color, image, replyTo);
         chatMessages.appendChild(el);
