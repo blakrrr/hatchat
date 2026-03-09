@@ -155,13 +155,12 @@ app.post('/upload-clip', (req, res) => {
     });
 });
 
-// DELETE /api/clips/purge-unknown — removes all clips tagged uploader:unknown
-// One-time cleanup endpoint; can be called from browser console
-app.delete('/api/clips/purge-unknown', async (req, res) => {
+// DELETE /api/purge-unknown — removes clips tagged uploader:unknown
+app.delete('/api/purge-unknown', async (req, res) => {
     try {
         const result = await cloudinary.api.resources({
             resource_type: 'video', type: 'upload',
-            prefix: 'hatchat-clips/', max_results: 200,
+            prefix: 'hatchat-clips/', max_results: 500,
             context: true, tags: true,
         });
         const toDelete = result.resources.filter(r => {
@@ -170,10 +169,31 @@ app.delete('/api/clips/purge-unknown', async (req, res) => {
             else if (r.tags) { const t = r.tags.find(t => t.startsWith('uploader:')); if (t) uploader = t.replace('uploader:', ''); }
             return uploader === 'unknown';
         });
-        for (const r of toDelete) {
+        for (const r of toDelete)
             await cloudinary.uploader.destroy(r.public_id, { resource_type: 'video' });
-        }
         res.json({ success: true, deleted: toDelete.length });
+    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// DELETE /api/purge-all — removes EVERY clip in hatchat-clips/
+app.delete('/api/purge-all', async (req, res) => {
+    try {
+        let deleted = 0;
+        let nextCursor = undefined;
+        do {
+            const result = await cloudinary.api.resources({
+                resource_type: 'video', type: 'upload',
+                prefix: 'hatchat-clips/', max_results: 100,
+                next_cursor: nextCursor,
+            });
+            const ids = result.resources.map(r => r.public_id);
+            if (ids.length > 0) {
+                await cloudinary.api.delete_resources(ids, { resource_type: 'video' });
+                deleted += ids.length;
+            }
+            nextCursor = result.next_cursor;
+        } while (nextCursor);
+        res.json({ success: true, deleted });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
