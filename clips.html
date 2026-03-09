@@ -24,6 +24,12 @@
         <div class="clips-theater" id="clips-theater" style="display:none">
             <video class="theater-video" id="theater-video" preload="metadata"></video>
             <div class="theater-controls">
+                <div class="tc-trim-wrap" title="Preview start offset from end of clip">
+                    <span class="tc-trim-label">trim</span>
+                    <input type="range" class="tc-trim" id="tc-trim" min="0" max="5" step="1" value="5">
+                    <span class="tc-trim-val" id="tc-trim-val">60s</span>
+                </div>
+                <div class="tc-divider"></div>
                 <button class="tc-btn" id="tc-prev">⏮</button>
                 <button class="tc-btn" id="tc-play">▶</button>
                 <button class="tc-btn" id="tc-next">⏭</button>
@@ -41,7 +47,7 @@
         <!-- Upload -->
         <div class="clips-upload-section" id="drop-zone">
             <h2>upload a clip</h2>
-            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB &nbsp;|&nbsp; last 30s kept &nbsp;|&nbsp; drag & drop or browse</p>
+            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB &nbsp;|&nbsp; last 60s kept &nbsp;|&nbsp; drag & drop or browse</p>
             <label class="clip-upload-label" for="clip-file-input">choose files</label>
             <input type="file" id="clip-file-input" class="clip-file-input"
                    accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
@@ -136,6 +142,11 @@
         const clip = playlist[playIdx];
         tvid.src = clip.url;
         tvid.load();
+        // Seek to trim offset once duration is available
+        tvid.addEventListener('loadedmetadata', function onTrimSeek() {
+            if (tvid.duration > trimSecs) tvid.currentTime = tvid.duration - trimSecs;
+            tvid.removeEventListener('loadedmetadata', onTrimSeek);
+        });
         tvid.play().catch(()=>{});
         tcPlay.textContent = '⏸';
         const name = (clip.filename || '').replace(/\.[^.]+$/,'');
@@ -395,6 +406,10 @@
         const thumbVid=document.createElement('video');
         thumbVid.src=url; thumbVid.preload='metadata'; thumbVid.muted=true;
         thumbVid.style.cssText='width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;';
+        // Seek to trim offset when duration is known so you see the action, not the start
+        thumbVid.addEventListener('loadedmetadata', () => {
+            if (thumbVid.duration > trimSecs) thumbVid.currentTime = thumbVid.duration - trimSecs;
+        });
         thumb.appendChild(thumbVid);
 
         // Play overlay — opens in theater
@@ -468,6 +483,42 @@
         clearTimeout(statusMsg._timer);
         statusMsg._timer=setTimeout(()=>{statusMsg.className='clips-status-msg';},7000);
     }
+
+    // ── Trim slider ──────────────────────────────────────────
+    // Maps slider position 0-5 to preview-start offset (seconds from end).
+    // Default is position 5 = 60s. Changing it re-seeks all loaded thumbs.
+    const TRIM_MAP = [15, 20, 25, 30, 45, 60];
+    let trimSecs = 60;
+    const tcTrim    = document.getElementById('tc-trim');
+    const tcTrimVal = document.getElementById('tc-trim-val');
+
+    tcTrim.addEventListener('input', () => {
+        trimSecs = TRIM_MAP[parseInt(tcTrim.value)];
+        tcTrimVal.textContent = trimSecs + 's';
+        document.querySelectorAll('.clip-thumb video').forEach(v => {
+            if (v.readyState >= 1 && v.duration > trimSecs) {
+                v.currentTime = v.duration - trimSecs;
+            }
+        });
+        if (tvid.duration && tvid.duration > trimSecs) {
+            tvid.currentTime = tvid.duration - trimSecs;
+        }
+    });
+
+    // ── Scroll-shrink theater ────────────────────────────────
+    window.addEventListener('scroll', () => {
+        const theater = document.getElementById('clips-theater');
+        if (theater.style.display === 'none') return;
+        const scrollY = window.scrollY || window.pageYOffset;
+        const vh = window.innerHeight / 100;
+        const maxH = Math.max(20 * vh, 55 * vh - scrollY * 0.1);
+        document.getElementById('theater-video').style.maxHeight = maxH + 'px';
+    });
+
+    // ── Tab-away pause ───────────────────────────────────────
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) tvid.pause();
+    });
 
     loadClips();
 </script>

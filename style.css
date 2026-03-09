@@ -574,6 +574,38 @@ body.clips-page {
 .tc-btn:hover  { background: #2a2a2a; color: #fff; }
 .tc-btn.active { background: #2e5e2e; border-color: #4a8a4a; color: #9fd49f; }
 
+/* ── Trim control ──────────────────────────── */
+.tc-trim-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+.tc-trim-label {
+    font-size: 0.65rem;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.tc-trim {
+    width: 80px;
+    accent-color: #5a5aff;
+    cursor: pointer;
+}
+.tc-trim-val {
+    font-size: 0.68rem;
+    color: #8888cc;
+    min-width: 2.8ch;
+    font-family: DejaVu Sans Mono, monospace;
+}
+.tc-divider {
+    width: 1px;
+    height: 18px;
+    background: #2a2a2a;
+    margin: 0 0.2rem;
+    flex-shrink: 0;
+}
+
 .tc-seek {
     flex: 1;
     min-width: 60px;
