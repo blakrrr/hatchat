@@ -125,33 +125,46 @@ const clipStorage = multer.diskStorage({
 const clipUpload = multer({
     storage: clipStorage,
     fileFilter: (req, file, cb) => {
-        const allowed = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
-        allowed.includes(file.mimetype)
-            ? cb(null, true)
-            : cb(new Error('Only video files are allowed!'), false);
+        // Windows/Chrome sometimes reports .mp4 as application/octet-stream.
+        // So we accept any video/* MIME type OR any recognised video extension.
+        // This is safe because we still reject at the OS level via multer limits.
+        const mimeOk = file.mimetype.startsWith('video/') ||
+                       file.mimetype === 'application/octet-stream';
+        const extOk  = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.originalname);
+        if (mimeOk || extOk) {
+            cb(null, true);
+        } else {
+            cb(new Error('File type not allowed. Please upload mp4, webm, or mov.'), false);
+        }
     },
     limits: { fileSize: 500 * 1024 * 1024 } // 500 MB per clip
 });
 
-// POST /upload-clip — saves file, responds immediately, then compresses in background
-app.post('/upload-clip', clipUpload.single('clip'), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-
-        // Respond NOW — don't make the user wait for ffmpeg
-        res.status(200).json({ success: true, filename: req.file.filename });
-
-        // Compress in background (not awaited — fire and forget)
-        compressVideo(req.file.path).catch((err) => {
-            console.error('Background compression error:', err);
-        });
-
-    } catch (error) {
-        console.error('Clip upload error:', error);
-        if (!res.headersSent) {
-            return res.status(500).json({ success: false, message: 'Server error' });
+// POST /upload-clip — saves file, responds immediately, then compresses in background.
+// IMPORTANT: we call clipUpload.single() manually (callback style) instead of using
+// it as middleware so that multer errors are caught here and returned as JSON.
+// When multer is used as Express middleware and throws, Express returns an HTML 500
+// page — which the client cannot JSON.parse, causing the "unexpected response" error.
+app.post('/upload-clip', (req, res) => {
+    clipUpload.single('clip')(req, res, (err) => {
+        if (err) {
+            console.error('Multer error:', err.message);
+            return res.status(400).json({ success: false, message: err.message || 'Upload error' });
         }
-    }
+        try {
+            if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+            // Respond NOW — do not make the user wait for ffmpeg
+            res.status(200).json({ success: true, filename: req.file.filename });
+
+            // Compress in background (fire and forget)
+            compressVideo(req.file.path).catch((e) => console.error('Compression error:', e));
+
+        } catch (error) {
+            console.error('Clip upload error:', error);
+            if (!res.headersSent) res.status(500).json({ success: false, message: 'Server error' });
+        }
+    });
 });
 
 // GET /clips — returns a sorted list of all clip filenames
