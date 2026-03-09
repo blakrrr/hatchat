@@ -171,119 +171,75 @@ nav a:hover {
     color: #999;
 }
 
-/* ── Reply Button (shows on hover) ──────────────────────────── */
-.reply-btn {
-    display: none;
-    position: absolute;
-    right: 6px;
-    top: 4px;
-    background: none;
-    border: 1px solid #444;
-    border-radius: 4px;
-    color: #aaa;
-    cursor: pointer;
-    font-size: 0.75rem;
-    padding: 1px 5px;
-    line-height: 1.4;
-    transition: background 0.15s, color 0.15s;
-    font-family: DejaVu Sans Mono, monospace;
-}
+/* ── Reply Button — REMOVED (click name to reply instead) ─────── */
 
-.message:hover .reply-btn {
-    display: block;
-}
+/* ── Reply Thread: L-shaped line connecting reference to reply ──
+   Visual:
+     │  ave: original text...          ← .reply-ref (ghost line)
+     └─ reply text here                ← .reply-body
 
-.reply-btn:hover {
-    background-color: #333;
-    color: #fff;
-    border-color: #666;
-}
-
-/* ── Reply Quote Block ──────────────────────────────────────────
-   The "inverted C" / bracket shape connecting the quoted message
-   to the reply below it.
-
-   Visual result:
-     ╭── ave: original text here...
-     │
-     reply text here
-
-   --reply-color is set per-element by JS to match the quoted sender.
-   The ::before draws the short vertical tail from the bracket corner
-   down to the reply text, completing the bracket shape.
-────────────────────────────────────────────────────────────── */
-/* Wrapper that holds both the quote chip and the reply message content */
-.reply-wrapper {
-    display: flex;
-    flex-direction: column;
+   --thread-color matches the quoted sender's color.
+───────────────────────────────────────────────────────────────── */
+.reply-thread {
     position: relative;
     padding-left: 14px;
-    margin-top: 4px;
-    margin-bottom: 2px;
+    margin-top: 1px;
+    margin-bottom: 1px;
 }
 
-/* Vertical bar on the left, running from quote chip down to message */
-.reply-wrapper::before {
+/* Vertical part of the L */
+.reply-thread::before {
     content: '';
     position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 18px;
+    left: 3px;
+    top: 2px;
+    bottom: 14px;
     width: 2px;
-    background: var(--reply-color, #555);
+    background: var(--thread-color, #555);
     border-radius: 1px;
-    opacity: 0.65;
+    opacity: 0.5;
 }
 
-/* Bottom-left curve hooking right into the reply text */
-.reply-wrapper::after {
+/* Horizontal part of the L, hooking right into reply body */
+.reply-thread::after {
     content: '';
     position: absolute;
-    left: 0;
-    bottom: 16px;
-    width: 12px;
-    height: 10px;
-    border-left: 2px solid var(--reply-color, #555);
-    border-bottom: 2px solid var(--reply-color, #555);
-    border-radius: 0 0 0 4px;
-    opacity: 0.65;
+    left: 3px;
+    bottom: 12px;
+    width: 10px;
+    height: 8px;
+    border-left: 2px solid var(--thread-color, #555);
+    border-bottom: 2px solid var(--thread-color, #555);
+    border-radius: 0 0 0 3px;
+    opacity: 0.5;
 }
 
-.reply-quote {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 10px 3px 4px;
-    background-color: rgba(255, 255, 255, 0.05);
-    border-radius: 4px;
-    font-size: 0.78em;
+.reply-ref {
+    font-size: 0.75em;
+    color: #555;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    cursor: pointer;
-    transition: background 0.12s;
-    margin-bottom: 6px;
-    max-width: 480px;
+    max-width: 400px;
+    margin-bottom: 2px;
 }
 
-.reply-quote:hover { background-color: rgba(255,255,255,0.09); }
-
-.reply-quote-icon {
-    color: var(--reply-color, #888);
-    font-size: 0.85em;
-    flex-shrink: 0;
-    opacity: 0.85;
-}
-
-.reply-quote-author {
+.reply-ref-author {
     font-weight: bold;
-    flex-shrink: 0;
 }
 
-.reply-quote-text { color: #999; overflow: hidden; text-overflow: ellipsis; }
+.reply-ref-text {
+    color: #4a4a4a;
+}
 
 .reply-body {
-    padding-bottom: 4px;
+    padding-bottom: 2px;
+}
+
+/* Sender name becomes clickable to reply */
+.message-sender:hover {
+    text-decoration: underline;
+    opacity: 0.85;
 }
 
 /* ── Reply Preview Bar (above the input) ─────────────────────── */
@@ -596,11 +552,9 @@ body.clips-page {
     align-items: center;
     gap: 0.4rem;
     border-bottom: 1px solid #2a2a2a;
-    margin-bottom: 1.2rem;
-    padding-bottom: 0;
+    margin-bottom: 0.5rem;
     flex-wrap: wrap;
 }
-
 .clips-tab {
     padding: 0.35rem 0.85rem;
     font-size: 0.78rem;
@@ -616,52 +570,79 @@ body.clips-page {
 }
 .clips-tab:hover  { color: #aaa; }
 .clips-tab.active { color: #e0e0e0; border-bottom-color: #e0e0e0; }
+.clips-tab-users  { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
-.clips-tab-users {
+/* ── Player bar ──────────────────────────────────────────────── */
+.clips-player-bar {
     display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    margin-bottom: 1rem;
+}
+.cpb-btn {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    color: #aaa;
+    border-radius: 4px;
+    padding: 0.25rem 0.55rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: DejaVu Sans Mono, monospace;
+}
+.cpb-btn:hover { background: #2a2a2a; color: #fff; }
+.cpb-btn.active { background: #2e5e2e; border-color: #4a8a4a; color: #9fd49f; }
+.cpb-label {
+    font-size: 0.72rem;
+    color: #555;
+    margin-left: auto;
 }
 
 /* ── Clips grid ──────────────────────────────────────────────── */
-.clips-grid-section h2 {
-    margin-bottom: 1rem;
-    border-bottom: 1px solid #333;
-    padding-bottom: 0.5rem;
+.clips-grid-section {}
+
+/* Month section */
+.clips-month-section {
+    margin-bottom: 2rem;
 }
-
-/* Full-width container; user sections stack vertically */
-.clips-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-}
-
-/* Each user gets a labeled section */
-.clips-user-section {}
-
-.clips-user-heading {
-    font-size: 0.9rem;
-    color: #888;
+.clips-month-heading {
+    font-size: 0.82rem;
+    color: #666;
     text-transform: lowercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     margin: 0 0 0.75rem 0;
     padding-bottom: 0.3rem;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid #222;
 }
 
-/* Horizontal scrolling row of clips for each user */
-.clips-user-row {
-    display: flex;
-    flex-direction: row;
+/* 3-column grid, infinite rows */
+.clips-month-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
 }
-.clips-user-row::-webkit-scrollbar { height: 4px; }
-.clips-user-row::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+/* Older user-section rows (per-person tab) */
+.clips-user-section {}
+.clips-user-heading {
+    font-size: 0.82rem;
+    color: #666;
+    text-transform: lowercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 0.75rem 0;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #222;
+}
+.clips-user-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
 
 .clip-card {
     background-color: #1a1a1a;
@@ -669,8 +650,6 @@ body.clips-page {
     border-radius: 8px;
     overflow: hidden;
     transition: border-color 0.2s;
-    flex: 0 0 300px;  /* fixed width so row scrolls */
-    width: 300px;
 }
 .clip-card:hover { border-color: #444; }
 
@@ -682,54 +661,38 @@ body.clips-page {
     object-fit: contain;
 }
 
-.clip-card-info {
-    padding: 0.6rem 0.8rem;
-}
+.clip-card-info { padding: 0.5rem 0.7rem 0.6rem; }
 
 .clip-card-name {
-    font-size: 0.78rem;
-    color: #aaa;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 0.72rem; color: #aaa;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     margin: 0;
 }
-
-.clip-card-date {
-    font-size: 0.72rem;
-    color: #666;
-    margin-top: 0.2rem;
+.clip-card-uploader {
+    font-size: 0.7rem; color: #777;
+    margin: 0.15rem 0 0;
 }
-
+.clip-card-date {
+    font-size: 0.68rem; color: #555;
+    margin-top: 0.15rem;
+}
 .clip-delete-btn {
-    display: inline-block;
-    margin-top: 0.4rem;
-    padding: 0.2rem 0.5rem;
-    font-size: 0.7rem;
+    display: inline-block; margin-top: 0.35rem;
+    padding: 0.15rem 0.45rem; font-size: 0.68rem;
     font-family: DejaVu Sans Mono, monospace;
-    background: transparent;
-    border: 1px solid #5a1a1a;
-    color: #cf6f6f;
-    border-radius: 3px;
-    cursor: pointer;
+    background: transparent; border: 1px solid #5a1a1a;
+    color: #cf6f6f; border-radius: 3px; cursor: pointer;
     transition: background 0.15s;
 }
 .clip-delete-btn:hover { background: #3a1111; }
 
 .clips-empty {
-    text-align: center;
-    color: #555;
-    padding: 3rem;
-    font-size: 0.9rem;
+    text-align: center; color: #555;
+    padding: 3rem; font-size: 0.9rem;
 }
-
 .clips-status-msg {
-    text-align: center;
-    padding: 0.5rem;
-    font-size: 0.85rem;
-    border-radius: 4px;
-    margin-bottom: 1rem;
-    display: none;
+    text-align: center; padding: 0.5rem; font-size: 0.85rem;
+    border-radius: 4px; margin-bottom: 1rem; display: none;
 }
 .clips-status-msg.success { background-color: #1b3a1b; color: #6fcf6f; display: block; }
 .clips-status-msg.error   { background-color: #3a1b1b; color: #cf6f6f; display: block; }

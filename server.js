@@ -110,7 +110,8 @@ app.post('/upload-clip', (req, res) => {
                                 overwrite: false,
                                 // Trim to 30 seconds, compress to ~50 MB quality
                                 eager: [{
-                                    duration: '30',
+                                    // Trim to last 30 seconds: start_offset counts from end
+                                    start_offset: '-30',
                                     quality: 'auto:low',
                                     fetch_format: 'mp4',
                                     bit_rate: '1m',

@@ -20,10 +20,10 @@
     <div class="clips-main">
         <div id="clips-status" class="clips-status-msg"></div>
 
-        <!-- Upload Section -->
+        <!-- Upload -->
         <div class="clips-upload-section" id="drop-zone">
             <h2>upload a clip</h2>
-            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB per file &nbsp;|&nbsp; trimmed to 30s &nbsp;|&nbsp; drag & drop or browse</p>
+            <p>nvidia clips only &nbsp;·&nbsp; mp4 · webm · mov &nbsp;|&nbsp; max 50 MB per file &nbsp;|&nbsp; trimmed to last 30s &nbsp;|&nbsp; drag & drop or browse</p>
             <label class="clip-upload-label" for="clip-file-input">choose files</label>
             <input type="file" id="clip-file-input" class="clip-file-input"
                    accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
@@ -37,13 +37,23 @@
             </div>
         </div>
 
-        <!-- Tab Bar -->
+        <!-- Tab Bar: All Clips + per-person tabs -->
         <div class="clips-tab-bar">
             <button class="clips-tab active" id="tab-all" onclick="switchTab('all')">all clips</button>
-            <div class="clips-tab-users" id="tab-users"><!-- user tabs injected here --></div>
+            <div class="clips-tab-users" id="tab-users"></div>
         </div>
 
-        <!-- Clips Area -->
+        <!-- Viewer: master playlist controls -->
+        <div class="clips-player-bar" id="clips-player-bar" style="display:none">
+            <button class="cpb-btn" id="cpb-prev" title="Previous clip">⏮</button>
+            <button class="cpb-btn" id="cpb-play" title="Play / Pause">▶</button>
+            <button class="cpb-btn" id="cpb-next" title="Next clip">⏭</button>
+            <button class="cpb-btn" id="cpb-loop" title="Loop">🔁</button>
+            <button class="cpb-btn" id="cpb-shuffle" title="Shuffle">🔀</button>
+            <span class="cpb-label" id="cpb-label">— / —</span>
+        </div>
+
+        <!-- Clips Grid -->
         <div class="clips-grid-section">
             <div id="clips-all-view">
                 <div class="clips-grid" id="clips-grid-all">
@@ -68,10 +78,83 @@
     const progressBar   = document.getElementById('clip-progress-bar');
     const progressLabel = document.getElementById('clip-progress-label');
     const statusMsg     = document.getElementById('clips-status');
+    const playerBar     = document.getElementById('clips-player-bar');
 
     let selectedFiles = [];
-    let allClipsData  = [];   // cache for tab switching
+    let allClipsData  = [];
     let activeTab     = 'all';
+
+    // ── Playlist state ───────────────────────────────────────
+    let playlist    = [];   // [{video el, clip}] in current view order
+    let playIdx     = 0;
+    let isLooping   = false;
+    let isShuffled  = false;
+
+    const cpbPrev    = document.getElementById('cpb-prev');
+    const cpbPlay    = document.getElementById('cpb-play');
+    const cpbNext    = document.getElementById('cpb-next');
+    const cpbLoop    = document.getElementById('cpb-loop');
+    const cpbShuffle = document.getElementById('cpb-shuffle');
+    const cpbLabel   = document.getElementById('cpb-label');
+
+    function buildPlaylist() {
+        const view = activeTab === 'all'
+            ? document.getElementById('clips-grid-all')
+            : document.getElementById('clips-grid-user');
+        const videos = [...view.querySelectorAll('.clip-card video')];
+        playlist = videos.map((v, i) => ({ video: v, idx: i }));
+        if (isShuffled) shuffleArray(playlist);
+        playerBar.style.display = playlist.length ? 'flex' : 'none';
+        updateLabel();
+    }
+
+    function shuffleArray(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+    }
+
+    function updateLabel() {
+        cpbLabel.textContent = playlist.length
+            ? `${playIdx + 1} / ${playlist.length}`
+            : '— / —';
+    }
+
+    function playClip(idx) {
+        // Pause current
+        playlist.forEach(p => { p.video.pause(); });
+        playIdx = ((idx % playlist.length) + playlist.length) % playlist.length;
+        const entry = playlist[playIdx];
+        entry.video.currentTime = 0;
+        entry.video.play().catch(() => {});
+        entry.video.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        cpbPlay.textContent = '⏸';
+        updateLabel();
+        // Auto-advance when done
+        entry.video.onended = () => {
+            if (isLooping) { entry.video.currentTime = 0; entry.video.play().catch(()=>{}); }
+            else playClip(playIdx + 1);
+        };
+    }
+
+    cpbPrev.addEventListener('click',    () => playClip(playIdx - 1));
+    cpbNext.addEventListener('click',    () => playClip(playIdx + 1));
+    cpbPlay.addEventListener('click',    () => {
+        if (!playlist.length) return;
+        const v = playlist[playIdx].video;
+        if (v.paused) { v.play().catch(()=>{}); cpbPlay.textContent = '⏸'; }
+        else          { v.pause();               cpbPlay.textContent = '▶'; }
+    });
+    cpbLoop.addEventListener('click', () => {
+        isLooping = !isLooping;
+        cpbLoop.classList.toggle('active', isLooping);
+    });
+    cpbShuffle.addEventListener('click', () => {
+        isShuffled = !isShuffled;
+        cpbShuffle.classList.toggle('active', isShuffled);
+        buildPlaylist();
+    });
 
     // ── Tab switching ────────────────────────────────────────
     function switchTab(tab) {
@@ -87,25 +170,80 @@
             document.getElementById('clips-user-view').style.display = '';
             renderUserGrid(tab);
         }
+        buildPlaylist();
     }
 
     function renderUserGrid(user) {
         const grid = document.getElementById('clips-grid-user');
         grid.innerHTML = '';
         const clips = allClipsData.filter(c => (c.uploader || 'unknown') === user);
-        clips.forEach(c => grid.appendChild(buildClipCard(c)));
+        // Group by month within user's clips
+        const months = groupByMonth(clips);
+        renderMonthGroups(grid, months, false);
     }
 
-    function buildTabBar(groups) {
+    function buildTabBar(uploaders) {
         const tabUsers = document.getElementById('tab-users');
         tabUsers.innerHTML = '';
-        Object.keys(groups).sort().forEach(user => {
+        uploaders.sort().forEach(user => {
             const btn = document.createElement('button');
-            btn.className   = 'clips-tab';
+            btn.className    = 'clips-tab';
             btn.dataset.user = user;
-            btn.textContent = user;
-            btn.onclick = () => switchTab(user);
+            btn.textContent  = user;
+            btn.onclick      = () => switchTab(user);
             tabUsers.appendChild(btn);
+        });
+    }
+
+    // ── Month helpers ────────────────────────────────────────
+    const MONTHS = ['january','february','march','april','may','june',
+                    'july','august','september','october','november','december'];
+
+    function getClipDate(clip) {
+        const m = (clip.filename || '').match(/(\d{4})\.(\d{2})\.(\d{2})/);
+        if (m) return new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]));
+        if (clip.created_at) return new Date(clip.created_at);
+        return null;
+    }
+
+    function monthKey(date) {
+        if (!date) return 'unknown';
+        return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+    }
+
+    function monthLabel(key) {
+        if (key === 'unknown') return 'unknown date';
+        const [yr, mo] = key.split('-');
+        return `${MONTHS[parseInt(mo)-1]} ${yr}`;
+    }
+
+    function groupByMonth(clips) {
+        const map = {};
+        clips.forEach(c => {
+            const d = getClipDate(c);
+            const k = monthKey(d);
+            if (!map[k]) map[k] = [];
+            map[k].push(c);
+        });
+        // Sort month keys newest-first
+        return Object.fromEntries(
+            Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]))
+        );
+    }
+
+    function renderMonthGroups(container, months, showUploader) {
+        Object.entries(months).forEach(([key, clips]) => {
+            const section = document.createElement('div');
+            section.className = 'clips-month-section';
+            const heading = document.createElement('h3');
+            heading.className   = 'clips-month-heading';
+            heading.textContent = monthLabel(key);
+            section.appendChild(heading);
+            const grid = document.createElement('div');
+            grid.className = 'clips-month-grid';
+            clips.forEach(c => grid.appendChild(buildClipCard(c, showUploader)));
+            section.appendChild(grid);
+            container.appendChild(section);
         });
     }
 
@@ -207,48 +345,30 @@
 
             if (allClipsData.length === 0) {
                 grid.innerHTML = '<div class="clips-empty">no clips yet</div>';
-                buildTabBar({});
+                buildTabBar([]);
                 return;
             }
 
-            // Group by uploader for tabs
-            const groups = {};
-            allClipsData.forEach(c => {
-                const u = c.uploader || 'unknown';
-                if (!groups[u]) groups[u] = [];
-                groups[u].push(c);
-            });
+            // Build "all clips" view: group by month (across all users)
+            const months = groupByMonth(allClipsData);
+            renderMonthGroups(grid, months, true);  // showUploader=true
 
-            buildTabBar(groups);
+            // Build tab bar: one tab per unique uploader
+            const uploaders = [...new Set(allClipsData.map(c => c.uploader || 'unknown'))];
+            buildTabBar(uploaders);
 
-            // "All clips" view: one horizontal row per uploader
-            Object.keys(groups).sort().forEach(user => {
-                const section = document.createElement('div');
-                section.className = 'clips-user-section';
-                const heading = document.createElement('h3');
-                heading.className   = 'clips-user-heading';
-                heading.textContent = user;
-                const row = document.createElement('div');
-                row.className = 'clips-user-row';
-                groups[user].forEach(c => row.appendChild(buildClipCard(c)));
-                section.appendChild(heading);
-                section.appendChild(row);
-                grid.appendChild(section);
-            });
-
-            // Re-render active user tab if we're on one
-            if (activeTab !== 'all') renderUserGrid(activeTab);
+            buildPlaylist();
 
         } catch (e) {
             console.warn(`Attempt ${attempt} failed:`, e.message);
             if (attempt < MAX) setTimeout(() => loadClips(attempt + 1), RETRY);
             else document.getElementById('clips-grid-all').innerHTML =
-                '<div class="clips-empty">server took too long to wake up — refresh</div>';
+                '<div class="clips-empty">server took too long — refresh</div>';
         }
     }
 
     // ── Build clip card ──────────────────────────────────────
-    function buildClipCard(clip) {
+    function buildClipCard(clip, showUploader) {
         const filename = clip.filename || clip;
         const url      = clip.url || `${SERVER}/uploads/clips/${encodeURIComponent(filename)}`;
         const card     = document.createElement('div');
@@ -256,6 +376,17 @@
 
         const video = document.createElement('video');
         video.controls = true; video.preload = 'metadata'; video.src = url;
+        // Clicking card video also integrates with playlist
+        video.addEventListener('play', () => {
+            const idx = playlist.findIndex(p => p.video === video);
+            if (idx !== -1 && idx !== playIdx) {
+                playlist.forEach(p => { if (p.video !== video) p.video.pause(); });
+                playIdx = idx;
+                cpbPlay.textContent = '⏸';
+                updateLabel();
+            }
+        });
+        video.addEventListener('pause', () => { if (playlist[playIdx]?.video === video) cpbPlay.textContent = '▶'; });
 
         const info = document.createElement('div');
         info.className = 'clip-card-info';
@@ -266,6 +397,15 @@
         nameEl.textContent = displayName; nameEl.title = filename;
         info.appendChild(nameEl);
 
+        // Uploader shown on card in "all clips" view
+        if (showUploader && clip.uploader) {
+            const uploaderEl = document.createElement('p');
+            uploaderEl.className = 'clip-card-uploader';
+            uploaderEl.textContent = clip.uploader;
+            info.appendChild(uploaderEl);
+        }
+
+        // Date from filename or created_at
         const dateMatch = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
         if (dateMatch) {
             const [, yr, mo, dy, hr, min] = dateMatch;
@@ -280,7 +420,7 @@
             info.appendChild(d);
         }
 
-        // Delete button — only shown to the uploader
+        // Delete button — only for owner
         if (username && clip.uploader &&
             username.toLowerCase() === clip.uploader.toLowerCase() && clip.public_id) {
             const delBtn = document.createElement('button');
@@ -307,7 +447,6 @@
         return card;
     }
 
-    // ── Status helper ────────────────────────────────────────
     function showStatus(msg, type) {
         statusMsg.textContent = msg;
         statusMsg.className   = `clips-status-msg ${type}`;

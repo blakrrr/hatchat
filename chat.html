@@ -9,15 +9,12 @@
 <body>
     <header>
         <div class="logo">hatchat - 1.0.0.7</div>
-        <nav>
-            <ul>
-                <!-- clips sits to the left of homepage, as requested -->
-                <li><a href="clips.html">clips</a></li>
-                <li><a href="index.html">homepage</a></li>
-                <li><a href="chat.html">hatchat</a></li>
-                <li><a href="settings.html">settings</a></li>
-            </ul>
-        </nav>
+        <nav><ul>
+            <li><a href="clips.html">clips</a></li>
+            <li><a href="index.html">homepage</a></li>
+            <li><a href="chat.html">hatchat</a></li>
+            <li><a href="settings.html">settings</a></li>
+        </ul></nav>
     </header>
 
     <div class="load-more-container">
@@ -27,9 +24,7 @@
     <div class="main-content">
         <div class="user-list">
             <div class="dnd-toggle-container">
-                <label>
-                    <input type="checkbox" id="dnd-toggle"> Do Not Disturb
-                </label>
+                <label><input type="checkbox" id="dnd-toggle"> Do Not Disturb</label>
             </div>
             <h3>fellow hattingtons</h3>
             <div class="online-users" id="online-users"></div>
@@ -40,18 +35,14 @@
                 <h2>Live Chat</h2>
                 <p id="connection-status">Connecting...</p>
             </div>
-
             <div class="chat-messages" id="chat-messages">
                 <div class="loading-indicator" id="loading-indicator"></div>
             </div>
-
-            <!-- Reply preview bar — hidden until a user clicks ↩ on a message -->
             <div class="reply-preview" id="reply-preview">
-                <span class="reply-preview-label">↩ replying to</span>
+                <span class="reply-preview-label">replying to</span>
                 <span class="reply-preview-text" id="reply-preview-text"></span>
                 <button class="reply-cancel-btn" id="reply-cancel-btn" title="Cancel reply">✕</button>
             </div>
-
             <form class="chat-form" id="chat-form">
                 <input type="text" class="chat-input" id="chat-input"
                        placeholder="Type your message..." autocomplete="off">
@@ -63,7 +54,7 @@
             </form>
         </div>
 
-        <!-- ── Voice Chat Panel ──────────────────────────── -->
+        <!-- Voice Chat Panel -->
         <div class="voice-panel" id="voice-panel">
             <h3 class="voice-panel-title">voice</h3>
             <div class="voice-channel">
@@ -79,7 +70,6 @@
                 <button class="voice-ctrl-btn" id="voice-deaf-btn">🔇 deafen</button>
             </div>
         </div>
-
     </div>
 
     <!-- Username Modal -->
@@ -89,8 +79,7 @@
             <form id="username-form">
                 <div class="form-group">
                     <label for="username-input">Username:</label>
-                    <input type="text" class="form-input" id="username-input"
-                           placeholder="Your username" required>
+                    <input type="text" class="form-input" id="username-input" placeholder="Your username" required>
                 </div>
                 <div class="form-group">
                     <label for="color-input">Message Color:</label>
@@ -103,93 +92,60 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script>
-    // ── Backend URL ───────────────────────────────────────────────────────
-    // GitHub Pages serves the HTML statically; the Node/Socket.IO server
-    // lives on Render. Update this if your Render URL changes.
-    const SERVER_URL = 'https://averrgy-github-io.onrender.com';
-
-    // ── State ──────────────────────────────────────────────────────────────
-    let username       = '';
-    let socket;
-    let currentPage    = 1;
-    let isLoading      = false;
-    let lastMessageSender = null;
-    let selectedImage  = null;
-    let isUploading    = false;
-    let isDndEnabled   = false;
-    let userColors     = {};
-
-    // replyingTo holds the message the user wants to reply to.
-    // Shape: { username, message, color }   — or null when not replying.
-    let replyingTo = null;
-
-    // ── DOM refs ──────────────────────────────────────────────────────────
-    const chatMessages    = document.getElementById('chat-messages');
-    const chatForm        = document.getElementById('chat-form');
-    const chatInput       = document.getElementById('chat-input');
-    const onlineUsers     = document.getElementById('online-users');
-    const usernameModal   = document.getElementById('username-modal');
-    const usernameForm    = document.getElementById('username-form');
-    const usernameInput   = document.getElementById('username-input');
-    const connectionStatus = document.getElementById('connection-status');
-    const loadMoreBtn     = document.getElementById('load-more-btn');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const colorInput      = document.getElementById('color-input');
-    const dndToggle       = document.getElementById('dnd-toggle');
-    const replyPreview    = document.getElementById('reply-preview');
-    const replyPreviewText = document.getElementById('reply-preview-text');
-    const replyCancelBtn  = document.getElementById('reply-cancel-btn');
-    const notificationSound = new Audio();
-
-    // ── Emoji map ─────────────────────────────────────────────────────────
-    const emojiMap = {
-        ':smile:'           : '🙂',
-        ':heart:'           : '❤️',
-        ':tongue:'          : '👅',
-        ':green_square:'    : '🟩',
-        ':anatomical_heart:': '🫀 (ANATOMICAL HEART!!!)',
-        ':locomotive:'      : '🚂',
-        ':train:'           : '🚂',
-        ':horse:'           : '🐎',
-        ':fish:'            : '🐟',
-        ':nerd:'            : '🤓'
-    };
-
-    function replaceEmojis(text) {
-        return text.replace(/:\w+:/g, match => emojiMap[match] || match);
+    if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+        location.replace('https:' + location.href.substring(5));
     }
 
-    // ── Reply helpers ─────────────────────────────────────────────────────
-    // setReply is called when the user clicks ↩ on any message.
-    // We store the target message's data and show the preview bar.
+    const SERVER_URL = 'https://averrgy-github-io.onrender.com';
+
+    let username = '', socket;
+    let currentPage = 1, isLoading = false, lastMessageSender = null;
+    let selectedImage = null, isUploading = false, isDndEnabled = false;
+    let userColors = {}, replyingTo = null;
+
+    const chatMessages     = document.getElementById('chat-messages');
+    const chatForm         = document.getElementById('chat-form');
+    const chatInput        = document.getElementById('chat-input');
+    const onlineUsers      = document.getElementById('online-users');
+    const usernameModal    = document.getElementById('username-modal');
+    const usernameForm     = document.getElementById('username-form');
+    const usernameInput    = document.getElementById('username-input');
+    const connectionStatus = document.getElementById('connection-status');
+    const loadMoreBtn      = document.getElementById('load-more-btn');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const colorInput       = document.getElementById('color-input');
+    const dndToggle        = document.getElementById('dnd-toggle');
+    const replyPreview     = document.getElementById('reply-preview');
+    const replyPreviewText = document.getElementById('reply-preview-text');
+    const replyCancelBtn   = document.getElementById('reply-cancel-btn');
+    const notificationSound = new Audio();
+
+    const emojiMap = {
+        ':smile:':'🙂',':heart:':'❤️',':tongue:':'👅',':green_square:':'🟩',
+        ':anatomical_heart:':'🫀 (ANATOMICAL HEART!!!)',':locomotive:':'🚂',
+        ':train:':'🚂',':horse:':'🐎',':fish:':'🐟',':nerd:':'🤓'
+    };
+    function replaceEmojis(text) { return text.replace(/:\w+:/g, m => emojiMap[m] || m); }
+
     function setReply(data) {
-        replyingTo = data; // { username, message, color }
+        replyingTo = data;
         const preview = data.message
-            ? `${data.username}: ${data.message.substring(0, 80)}${data.message.length > 80 ? '…' : ''}`
+            ? `${data.username}: ${data.message.substring(0,80)}${data.message.length>80?'…':''}`
             : `${data.username}: [image]`;
         replyPreviewText.textContent = preview;
         replyPreview.style.display = 'flex';
         chatInput.focus();
     }
-
     function clearReply() {
         replyingTo = null;
         replyPreview.style.display = 'none';
         replyPreviewText.textContent = '';
     }
-
     replyCancelBtn.addEventListener('click', clearReply);
 
-    // ── Timestamp formatter ───────────────────────────────────────────────
-    function formatTimestamp(timestamp) {
-        return new Date(timestamp).toLocaleString();
-    }
-
-    // ── Init on page load ─────────────────────────────────────────────────
     window.addEventListener('DOMContentLoaded', () => {
         const storedUsername = localStorage.getItem('chat_username');
         const storedColor    = localStorage.getItem('chat_color') || '#FFFFFF';
-
         if (storedUsername) {
             username = storedUsername;
             if (colorInput) colorInput.value = storedColor;
@@ -204,7 +160,6 @@
         const entered = usernameInput.value.trim();
         if (entered.length > 8) { alert('Username must be 8 characters or less.'); return; }
         if (!entered) return;
-
         username = entered;
         const selectedColor = document.getElementById('color-input').value;
         localStorage.setItem('chat_username', username);
@@ -213,28 +168,21 @@
         initializeChat(selectedColor);
     });
 
-    // ── Chat initialisation ───────────────────────────────────────────────
     function initializeChat(selectedColor) {
         socket = io(SERVER_URL, {
             query: { username, color: selectedColor },
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000
+            reconnection: true, reconnectionAttempts: 5,
+            reconnectionDelay: 1000, reconnectionDelayMax: 5000
         });
 
-        // ── Incoming chat message ────────────────────────────────────────
         socket.on('chat_message', (data) => {
             displayMessage(data.username, data.message, data.timestamp,
                            data.color, data.image, data.replyTo);
             if (data.image) socket.emit('image_posted');
         });
 
-        socket.on('scroll_to_latest', () => {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        });
+        socket.on('scroll_to_latest', () => { chatMessages.scrollTop = chatMessages.scrollHeight; });
 
-        // ── Connection events ────────────────────────────────────────────
         socket.on('connect', () => {
             connectionStatus.textContent = 'Connected';
             connectionStatus.style.color = '#4CAF50';
@@ -247,27 +195,18 @@
             connectionStatus.style.color = '#ff6b6b';
         });
 
-        // ── Message history ──────────────────────────────────────────────
         socket.on('chat_history', (data) => {
             loadingIndicator.style.display = 'none';
             isLoading = false;
-
             if (data.userColors) userColors = data.userColors;
-
-            if (currentPage === 1) {
-                chatMessages.innerHTML = '';
-                lastMessageSender = null;
-            }
+            if (currentPage === 1) { chatMessages.innerHTML = ''; lastMessageSender = null; }
 
             const messagesArray = [];
-
             data.messages.forEach((msg, index) => {
                 if (msg.type === 'system') {
                     messagesArray.push(createSystemMessageElement(msg.message, msg.timestamp));
                     lastMessageSender = null;
                 } else {
-                    // A message with a reply is always shown as a non-continuation
-                    // so the sender header is always visible above the quote block.
                     let isContinuation = false;
                     if (currentPage > 1 && index > 0 && !msg.replyTo) {
                         const prev = data.messages[index - 1];
@@ -281,12 +220,9 @@
                 }
             });
 
-            // For the first page the server sends newest→oldest, so we reverse.
             if (currentPage === 1) {
                 messagesArray.reverse();
                 recalcContinuations(messagesArray);
-
-                // Track last sender for future incoming messages
                 for (let i = messagesArray.length - 1; i >= 0; i--) {
                     const el = messagesArray[i];
                     if (!el.classList.contains('system-message')) {
@@ -294,9 +230,7 @@
                         if (sEl) { lastMessageSender = sEl.getAttribute('data-sender'); break; }
                     }
                 }
-            } else {
-                recalcContinuations(messagesArray);
-            }
+            } else { recalcContinuations(messagesArray); }
 
             const fragment = document.createDocumentFragment();
             messagesArray.forEach(el => fragment.appendChild(el));
@@ -307,50 +241,37 @@
             } else {
                 chatMessages.insertBefore(fragment, chatMessages.firstChild);
             }
-
             loadMoreBtn.disabled = (data.messages.length < 20);
         });
 
-        // ── User events ──────────────────────────────────────────────────
         socket.on('user_join', (data) => {
             displaySystemMessage(`${data.username} has joined the chat`, new Date().toISOString());
             if (data.userColors) userColors = data.userColors;
             updateOnlineUsers(data.users);
         });
-
         socket.on('user_leave', (data) => {
             displaySystemMessage(`${data.username} has left the chat`, new Date().toISOString());
             if (data.userColors) userColors = data.userColors;
             updateOnlineUsers(data.users);
         });
-
         socket.on('update_users',  (data) => updateOnlineUsers(data.users));
-
         socket.on('update_colors', (data) => {
-            if (data.userColors) {
-                userColors = data.userColors;
-                updateDisplayedColors();
-            }
+            if (data.userColors) { userColors = data.userColors; updateDisplayedColors(); }
         });
 
-        // ── UI controls ──────────────────────────────────────────────────
         loadMoreBtn.addEventListener('click', () => {
             if (!isLoading) { currentPage++; loadMessages(currentPage); }
         });
-
         document.getElementById('color-input').addEventListener('change', (e) => {
             socket.emit('update_color', { color: e.target.value });
         });
-
         dndToggle.addEventListener('change', () => {
             isDndEnabled = dndToggle.checked;
             if (socket) socket.emit('dnd_toggle', isDndEnabled);
         });
 
-        // ── Image upload setup ───────────────────────────────────────────
         setupImageUpload();
 
-        // ── Clipboard paste (images) ─────────────────────────────────────
         chatInput.addEventListener('paste', (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (let i = 0; i < items.length; i++) {
@@ -358,51 +279,37 @@
                     const file = items[i].getAsFile();
                     if (file.size > 5 * 1024 * 1024) { alert('Pasted image is too large. Max 5MB.'); return; }
                     selectedImage = file;
-                    chatInput.placeholder = 'Image pasted. Type a message (optional) and press send.';
+                    chatInput.placeholder = 'Image pasted. Type a caption (optional) and send.';
                     showImagePreview(file);
                     e.preventDefault();
                     return;
                 }
             }
         });
+
+        // Voice
+        initVoice();
     }
 
-    // ── Recalculate continuation markers on a batch of DOM elements ───────
-    // Called after sorting / reversing so the "continued-message" CSS class
-    // (which hides the sender label) is only applied when the same person
-    // sends multiple messages in a row, and NOT when there's a replyTo block.
     function recalcContinuations(elements) {
         const GAP_MS = 5 * 60 * 1000;
-        let prevSender = null;
-        let prevTs     = null;
+        let prevSender = null, prevTs = null;
         elements.forEach(el => {
-            if (el.classList.contains('system-message')) {
-                prevSender = null; prevTs = null; return;
-            }
+            if (el.classList.contains('system-message')) { prevSender = null; prevTs = null; return; }
             const sEl = el.querySelector('.message-sender');
             if (!sEl) return;
-
             const sender   = sEl.getAttribute('data-sender');
-            const hasReply = !!el.querySelector('.reply-wrapper');
+            const hasReply = !!el.querySelector('.reply-thread');
             const tsRaw    = el.getAttribute('data-ts');
             const ts       = tsRaw ? parseInt(tsRaw, 10) : null;
-
             const sameUser = prevSender === sender;
             const smallGap = (ts && prevTs) ? (ts - prevTs) < GAP_MS : true;
             const isCont   = sameUser && smallGap && !hasReply;
-
-            if (isCont) {
-                el.classList.add('continued-message');
-            } else {
-                el.classList.remove('continued-message');
-            }
-
-            prevSender = sender;
-            prevTs     = ts || prevTs;
+            el.classList.toggle('continued-message', isCont);
+            prevSender = sender; prevTs = ts || prevTs;
         });
     }
 
-    // ── Load messages from server ─────────────────────────────────────────
     function loadMessages(page) {
         if (isLoading) return;
         isLoading = true;
@@ -411,84 +318,60 @@
         socket.emit('load_messages', { page });
     }
 
-    // ── Image upload form handler ─────────────────────────────────────────
-    // IMPORTANT: This is the ONE AND ONLY submit handler.
-    // The original code had two — a bug that fired every send twice.
-    // This version handles text, images, emojis, and replies together.
     function setupImageUpload() {
         const imageUpload = document.getElementById('image-upload');
-
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            if (!file.type.startsWith('image/')) { alert('Please select an image file.'); imageUpload.value = ''; return; }
-            if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5 MB.'); imageUpload.value = ''; return; }
+            if (!file.type.startsWith('image/')) { alert('Please select an image file.'); imageUpload.value=''; return; }
+            if (file.size > 5*1024*1024) { alert('Image must be under 5 MB.'); imageUpload.value=''; return; }
             selectedImage = file;
-            chatInput.placeholder = `Image "${file.name}" selected. Type a message (optional) and send.`;
+            chatInput.placeholder = `Image "${file.name}" selected. Type a caption (optional) and send.`;
         });
 
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-
-            // Replace emoji shortcodes in the typed text
             let message = replaceEmojis(chatInput.value.trim());
-
             if (!message && !selectedImage) return;
             if (!socket || isUploading) return;
-
-            // Snapshot the current reply target before we might clear it
             const currentReply = replyingTo ? { ...replyingTo } : null;
 
-            if (selectedImage) {
-                // ── Image path ──────────────────────────────────────────
-                isUploading = true;
+            // Clear paste preview immediately on send
+            const pastePreview = document.getElementById('paste-preview');
+            if (pastePreview) pastePreview.remove();
 
+            if (selectedImage) {
+                isUploading = true;
                 const loader = document.createElement('div');
                 loader.className = 'image-loader';
                 chatForm.appendChild(loader);
-
                 const formData = new FormData();
                 formData.append('image', selectedImage);
-
                 try {
                     const response = await fetch(SERVER_URL + '/upload', {
-                        method: 'POST',
-                        body: formData,
+                        method: 'POST', body: formData,
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     });
-
-                    if (!response.ok) throw new Error(`Server ${response.status}: ${response.statusText}`);
-
+                    if (!response.ok) throw new Error(`Server ${response.status}`);
                     const ct = response.headers.get('content-type');
                     if (!ct || !ct.includes('application/json')) throw new Error('Server did not return JSON');
-
                     const result = await response.json();
-
                     if (result.success) {
                         let imagePath = result.filePath;
-                        if (imagePath && !imagePath.startsWith('http')) {
-                            imagePath = SERVER_URL +
-                                        (imagePath.startsWith('/') ? '' : '/') + imagePath;
-                        }
+                        if (imagePath && !imagePath.startsWith('http'))
+                            imagePath = SERVER_URL + (imagePath.startsWith('/') ? '' : '/') + imagePath;
                         socket.emit('chat_message', { message, image: imagePath, replyTo: currentReply });
-                    } else {
-                        alert('Upload failed: ' + (result.message || 'unknown error'));
-                    }
-                } catch (err) {
-                    alert('Upload error: ' + (err.message || err));
-                } finally {
-                    isUploading  = false;
-                    selectedImage = null;
+                    } else { alert('Upload failed: ' + (result.message || 'unknown error')); }
+                } catch (err) { alert('Upload error: ' + (err.message || err)); }
+                finally {
+                    isUploading = false; selectedImage = null;
                     chatInput.placeholder = 'Type your message...';
                     chatForm.removeChild(loader);
                 }
-
             } else {
-                // ── Text-only path ──────────────────────────────────────
                 socket.emit('chat_message', { message, replyTo: currentReply });
             }
 
-            // Clear input and reply state
             chatInput.value = '';
             document.getElementById('image-upload').value = '';
             chatInput.focus();
@@ -496,17 +379,20 @@
         });
     }
 
-    // ── Create a message element ──────────────────────────────────────────
+    // ── createMessageElement ──────────────────────────────────────────────
+    // Reply style: instead of an inline quote block, we render an L-shaped
+    // thread line connecting the original-message reference to the reply.
     function createMessageElement(sender, message, timestamp,
-                                  isContinuation = false, color, image = null, replyTo = null) {
+                                  isContinuation=false, color, image=null, replyTo=null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message';
         if (isContinuation) messageDiv.classList.add('continued-message');
+        if (replyTo) messageDiv.classList.add('is-reply');
         if (timestamp) messageDiv.setAttribute('data-ts', new Date(timestamp).getTime());
 
         const msgColor = color || userColors[sender] || null;
 
-        // ── Username area (always in DOM; CSS hides it for continuations) ─
+        // Username area — clicking it sets a reply
         const usernameArea = document.createElement('div');
         usernameArea.className = 'username-area';
         const senderEl = document.createElement('span');
@@ -514,52 +400,44 @@
         senderEl.setAttribute('data-sender', sender);
         senderEl.textContent = sender;
         if (msgColor) senderEl.style.color = msgColor;
+        // Click name → reply
+        senderEl.style.cursor = 'pointer';
+        senderEl.addEventListener('click', () => {
+            setReply({ username: sender, message: message || '', color: msgColor });
+        });
         const sep = document.createElement('span');
-        sep.className   = 'message-separator';
+        sep.className = 'message-separator';
         sep.textContent = ' ~ ';
         usernameArea.appendChild(senderEl);
         usernameArea.appendChild(sep);
 
-        // ── Reply button (always created up front so it's always available) ─
-        const replyBtn = document.createElement('button');
-        replyBtn.className   = 'reply-btn';
-        replyBtn.textContent = '↩';
-        replyBtn.title       = 'Reply';
-        replyBtn.type        = 'button';
-        replyBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            setReply({ username: sender, message: message || '', color: msgColor });
-        });
-
-        // ── Message content ───────────────────────────────────────────────
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
         if (msgColor) messageContent.style.color = msgColor;
 
         if (replyTo) {
-            // Discord-style reply: curved bar on the left connecting quote to text
-            const quoteColor = replyTo.color || userColors[replyTo.username] || '#666';
-            const wrapper = document.createElement('div');
-            wrapper.className = 'reply-wrapper';
-            wrapper.style.setProperty('--reply-color', quoteColor);
+            // L-line thread: a thin vertical + horizontal line drawn via CSS
+            // on the .reply-thread container, pointing from the quoted context
+            // down-and-right to the reply text.
+            const replyLineColor = replyTo.color || userColors[replyTo.username] || '#555';
+            const thread = document.createElement('div');
+            thread.className = 'reply-thread';
+            thread.style.setProperty('--thread-color', replyLineColor);
 
-            const quote = document.createElement('div');
-            quote.className = 'reply-quote';
-            const qIcon = document.createElement('span');
-            qIcon.className   = 'reply-quote-icon';
-            qIcon.textContent = '↩';
-            const qAuthor = document.createElement('span');
-            qAuthor.className   = 'reply-quote-author';
-            qAuthor.textContent = replyTo.username;
-            qAuthor.style.color = quoteColor;
-            const qText = document.createElement('span');
-            qText.className   = 'reply-quote-text';
+            // Small "ghost" reference line showing who was replied to
+            const refLine = document.createElement('div');
+            refLine.className = 'reply-ref';
+            const refAuthor = document.createElement('span');
+            refAuthor.className = 'reply-ref-author';
+            refAuthor.textContent = replyTo.username;
+            refAuthor.style.color = replyLineColor;
+            const refText = document.createElement('span');
+            refText.className = 'reply-ref-text';
             const raw = replyTo.message || '[image]';
-            qText.textContent = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
-            quote.appendChild(qIcon);
-            quote.appendChild(qAuthor);
-            quote.appendChild(document.createTextNode(': '));
-            quote.appendChild(qText);
+            refText.textContent = raw.length > 60 ? raw.substring(0,60)+'…' : raw;
+            refLine.appendChild(refAuthor);
+            refLine.appendChild(document.createTextNode(': '));
+            refLine.appendChild(refText);
 
             const replyBody = document.createElement('div');
             replyBody.className = 'reply-body';
@@ -573,9 +451,9 @@
                 if (message && message.length > 0) replyBody.appendChild(document.createElement('br'));
                 replyBody.appendChild(img);
             }
-            wrapper.appendChild(quote);
-            wrapper.appendChild(replyBody);
-            messageContent.appendChild(wrapper);
+            thread.appendChild(refLine);
+            thread.appendChild(replyBody);
+            messageContent.appendChild(thread);
         } else {
             if (message && message.length > 0) messageContent.appendChild(document.createTextNode(message));
             if (image) {
@@ -590,87 +468,57 @@
 
         messageDiv.appendChild(usernameArea);
         messageDiv.appendChild(messageContent);
-        messageDiv.appendChild(replyBtn);
         return messageDiv;
     }
 
-    // ── Create a system message element ──────────────────────────────────
     function createSystemMessageElement(message, timestamp) {
         const div = document.createElement('div');
-        div.className   = 'system-message';
+        div.className = 'system-message';
         div.textContent = message;
-        // timestamps removed
         return div;
     }
 
-    // ── Display a new incoming message ────────────────────────────────────
-    function displayMessage(sender, message, timestamp, color, image = null, replyTo = null) {
-        // Derive the last real sender directly from the DOM so we don't rely on
-        // the stale lastMessageSender variable (which can be wrong after system
-        // messages arrive out of order relative to chat_history).
+    function displayMessage(sender, message, timestamp, color, image=null, replyTo=null) {
         let lastDOMSender = null;
-        const allMessages = chatMessages.querySelectorAll('.message:not(.system-message)');
-        if (allMessages.length > 0) {
-            const lastEl = allMessages[allMessages.length - 1];
+        const allMsgs = chatMessages.querySelectorAll('.message:not(.system-message)');
+        if (allMsgs.length > 0) {
+            const lastEl = allMsgs[allMsgs.length - 1];
             const sEl = lastEl.querySelector('.message-sender');
             if (sEl) lastDOMSender = sEl.getAttribute('data-sender');
         }
-        // Also check if the very last child (including system messages) is a system message,
-        // which always breaks a continuation run.
         const lastChild = chatMessages.lastElementChild;
         const lastIsSystem = lastChild && lastChild.classList.contains('system-message');
-
         const isContinuation = !replyTo && !lastIsSystem && (lastDOMSender === sender);
-        const el = createMessageElement(sender, message, timestamp,
-                                        isContinuation, color, image, replyTo);
+        const el = createMessageElement(sender, message, timestamp, isContinuation, color, image, replyTo);
         chatMessages.appendChild(el);
         lastMessageSender = sender;
         chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        if (sender !== username && !isTabActive()) {
-            playNotificationSound();
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('New Message from ' + sender, {
-                    body: image ? 'Sent an image' + (message ? ': ' + message : '') : message,
-                    icon: 'icon.png'
-                });
-            }
-        }
     }
 
-    // ── Display a system message ──────────────────────────────────────────
     function displaySystemMessage(message, timestamp) {
-        chatMessages.appendChild(createSystemMessageElement(message, timestamp));
-        lastMessageSender = null; // always break continuation after system messages
+        const el = createSystemMessageElement(message, timestamp);
+        chatMessages.appendChild(el);
+        lastMessageSender = null;
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // ── Update online user list ────────────────────────────────────────────
     function updateOnlineUsers(users) {
+        if (!users) return;
         onlineUsers.innerHTML = '';
         users.forEach(user => {
-            const isObj    = typeof user === 'object';
-            const uname    = isObj ? user.username : user;
-            const isDnd    = isObj ? user.dnd : false;
-
-            const item   = document.createElement('div');
-            item.className = 'user-item';
-
-            const dot = document.createElement('div');
-            dot.className = 'user-status';
-            dot.style.backgroundColor = isDnd ? '#ff6b6b' : '#4CAF50';
-
+            const item  = document.createElement('div');
+            item.className = 'user-item' + (user.dnd ? ' user-dnd' : '');
+            const dot   = document.createElement('span');
+            dot.className  = 'user-dot';
             const label = document.createElement('span');
-            label.textContent = uname === window.username ? `${uname} (You)` : uname;
-            if (userColors[uname]) label.style.color = userColors[uname];
-
+            label.textContent = user.username;
+            if (userColors[user.username]) label.style.color = userColors[user.username];
             item.appendChild(dot);
             item.appendChild(label);
             onlineUsers.appendChild(item);
         });
     }
 
-    // ── Update colors on existing messages ────────────────────────────────
     function updateDisplayedColors() {
         document.querySelectorAll('.message').forEach(el => {
             const sEl = el.querySelector('.message-sender');
@@ -686,43 +534,32 @@
 
     function isTabActive() { return !document.hidden; }
 
-    // ── Notification sound ────────────────────────────────────────────────
     const mp3Source = document.createElement('source');
-    mp3Source.src  = 'public/sounds/notif.mp3';
-    mp3Source.type = 'audio/mpeg';
+    mp3Source.src = 'public/sounds/notif.mp3'; mp3Source.type = 'audio/mpeg';
     const wavSource = document.createElement('source');
-    wavSource.src  = 'public/sounds/notif.wav';
-    wavSource.type = 'audio/wav';
+    wavSource.src = 'public/sounds/notif.wav'; wavSource.type = 'audio/wav';
     notificationSound.appendChild(mp3Source);
     notificationSound.appendChild(wavSource);
 
     function playNotificationSound() {
         if (isDndEnabled) return;
-        notificationSound.currentTime = 0;
-        notificationSound.volume      = 0.5;
+        notificationSound.currentTime = 0; notificationSound.volume = 0.5;
         const p = notificationSound.play();
         if (p) p.catch(() => {});
     }
 
-    // ── Animal typing sounds ───────────────────────────────────────────────
     let enableSounds = localStorage.getItem('enable_sounds') === 'true';
     const animalSounds = {};
     'abcdefghijklmnopqrstuvwxyz'.split('').forEach(letter => {
         const s = new Audio(`public/sounds/animal/${letter}.wav`);
-        s.volume = 0.2;
-        animalSounds[letter] = s;
+        s.volume = 0.2; animalSounds[letter] = s;
     });
-
     chatInput.addEventListener('keydown', (e) => {
         if (!enableSounds) return;
         const key = e.key.toLowerCase();
-        if (animalSounds[key]) {
-            animalSounds[key].currentTime = 0;
-            animalSounds[key].play().catch(() => {});
-        }
+        if (animalSounds[key]) { animalSounds[key].currentTime = 0; animalSounds[key].play().catch(() => {}); }
     });
 
-    // ── Live emoji replacement while typing ───────────────────────────────
     chatInput.addEventListener('input', () => {
         const pos = chatInput.selectionStart;
         const before = chatInput.value.slice(0, pos);
@@ -732,29 +569,21 @@
         chatInput.selectionStart = chatInput.selectionEnd = newBefore.length;
     });
 
-    // ── Notification permission ───────────────────────────────────────────
     if ('Notification' in window) {
         Notification.requestPermission().then(p => {
             if (p === 'granted') console.log('Notification permission granted.');
         });
     }
 
-    // ── showImagePreview (used by clipboard paste) ─────────────────────────
     function showImagePreview(file) {
-        // Remove any existing preview
         const old = document.getElementById('paste-preview');
         if (old) old.remove();
-
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = document.createElement('img');
-            img.id        = 'paste-preview';
-            img.src       = e.target.result;
+            img.id = 'paste-preview'; img.src = e.target.result;
             img.className = 'image-preview';
-            img.style.maxWidth  = '120px';
-            img.style.maxHeight = '80px';
-            img.style.margin    = '4px 8px 0';
-            // Insert the preview just before the chat form
+            img.style.cssText = 'max-width:120px;max-height:80px;margin:4px 8px 0;display:block;';
             chatForm.parentNode.insertBefore(img, chatForm);
         };
         reader.readAsDataURL(file);
@@ -762,35 +591,40 @@
 
     document.addEventListener('visibilitychange', () => {});
 
-    // ── Voice Chat (WebRTC via Socket.IO signalling) ──────────────────
-    // Requires HTTPS for microphone access. If the page is on HTTP,
-    // redirect to HTTPS automatically.
-    if (location.protocol === 'http:' && location.hostname !== 'localhost') {
-        location.replace('https:' + location.href.substring(5));
-    }
-    (function() {
-        const joinBtn     = document.getElementById('voice-join-btn');
-        const membersEl   = document.getElementById('voice-members');
-        const controlsEl  = document.getElementById('voice-controls');
-        const muteBtn     = document.getElementById('voice-mute-btn');
-        const deafBtn     = document.getElementById('voice-deaf-btn');
+    // ── Voice Chat ────────────────────────────────────────────────────────
+    function initVoice() {
+        const joinBtn    = document.getElementById('voice-join-btn');
+        const membersEl  = document.getElementById('voice-members');
+        const controlsEl = document.getElementById('voice-controls');
+        const muteBtn    = document.getElementById('voice-mute-btn');
+        const deafBtn    = document.getElementById('voice-deaf-btn');
 
-        let inVoice      = false;
-        let isMuted      = false;
-        let isDeafened   = false;
-        let localStream  = null;
-        const peers      = {};   // socketId -> RTCPeerConnection
-        const audioEls   = {};   // socketId -> <audio>
-        let voiceMembers = {};   // socketId -> { username }
+        let inVoice = false, isMuted = false, isDeafened = false;
+        let localStream = null;
+        const peers    = {};   // socketId -> RTCPeerConnection
+        const audioEls = {};   // socketId -> <audio>
+        let voiceMembers = {}; // socketId -> { username, muted }
 
-        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        const iceConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
 
         function renderMembers() {
             membersEl.innerHTML = '';
+            // Show self first
+            if (inVoice) {
+                const self = document.createElement('div');
+                self.className = 'voice-member self';
+                self.innerHTML = `<span class="voice-member-icon">${isMuted ? '🔇' : '🎙'}</span><span>${username} <span style="color:#555;font-size:0.65em">(you)</span></span>`;
+                membersEl.appendChild(self);
+            }
             Object.values(voiceMembers).forEach(({ username: u, muted }) => {
                 const div = document.createElement('div');
-                div.className = 'voice-member' + (muted ? ' muted' : '');
-                div.innerHTML = `<span class="voice-member-icon">🎙</span><span>${u}</span>`;
+                div.className = 'voice-member';
+                div.innerHTML = `<span class="voice-member-icon">${muted ? '🔇' : '🎙'}</span><span>${u}</span>`;
                 membersEl.appendChild(div);
             });
         }
@@ -798,13 +632,12 @@
         async function joinVoice() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            } catch(e) {
-                alert('Microphone access denied: ' + e.message); return;
-            }
+            } catch(e) { alert('Microphone access denied: ' + e.message); return; }
             inVoice = true;
             joinBtn.textContent = 'leave';
             joinBtn.classList.add('active');
             controlsEl.style.display = 'flex';
+            renderMembers();
             socket.emit('voice_join', { username });
         }
 
@@ -816,8 +649,7 @@
             Object.values(audioEls).forEach(a => { a.srcObject = null; a.remove(); });
             Object.keys(audioEls).forEach(id => delete audioEls[id]);
             voiceMembers = {};
-            inVoice = false;
-            isMuted = false; isDeafened = false;
+            inVoice = false; isMuted = false; isDeafened = false;
             joinBtn.textContent = 'join';
             joinBtn.classList.remove('active');
             controlsEl.style.display = 'none';
@@ -836,6 +668,7 @@
             muteBtn.classList.toggle('active', isMuted);
             muteBtn.textContent = isMuted ? '🎤 unmute' : '🎤 mute';
             socket.emit('voice_mute', { muted: isMuted });
+            renderMembers();
         });
 
         deafBtn.addEventListener('click', () => {
@@ -845,12 +678,15 @@
             deafBtn.textContent = isDeafened ? '🔇 undeafen' : '🔇 deafen';
         });
 
-        // ── Signalling ────────────────────────────────────────
         async function createPeer(remoteId, initiator) {
+            if (peers[remoteId]) return peers[remoteId];
             const pc = new RTCPeerConnection(iceConfig);
             peers[remoteId] = pc;
 
-            if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+            // Add ALL local tracks to every peer connection
+            if (localStream) {
+                localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+            }
 
             pc.onicecandidate = e => {
                 if (e.candidate) socket.emit('voice_ice', { to: remoteId, candidate: e.candidate });
@@ -862,34 +698,48 @@
                     audio = document.createElement('audio');
                     audio.autoplay = true;
                     audio.muted = isDeafened;
+                    // Must be added to DOM for autoplay policies
+                    audio.style.display = 'none';
                     document.body.appendChild(audio);
                     audioEls[remoteId] = audio;
                 }
-                audio.srcObject = e.streams[0];
+                // Always reassign srcObject when a new track arrives
+                if (e.streams && e.streams[0]) {
+                    audio.srcObject = e.streams[0];
+                    audio.play().catch(() => {});
+                }
             };
 
-            if (initiator) {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                socket.emit('voice_offer', { to: remoteId, offer });
-            }
+            pc.onnegotiationneeded = async () => {
+                if (initiator) {
+                    try {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        socket.emit('voice_offer', { to: remoteId, offer: pc.localDescription });
+                    } catch(e) { console.error('Offer error:', e); }
+                }
+            };
+
             return pc;
         }
 
-        // Someone else joined — we initiate
         socket.on('voice_user_joined', async ({ socketId, username: u }) => {
             voiceMembers[socketId] = { username: u, muted: false };
             renderMembers();
-            if (inVoice) await createPeer(socketId, true);
+            if (inVoice) {
+                // We are already in voice — initiate connection to the new joiner
+                await createPeer(socketId, true);
+            }
         });
 
-        // Full list of current voice members sent when we join
         socket.on('voice_current_members', async (members) => {
+            // We just joined — server sends us everyone already in voice
             members.forEach(({ socketId, username: u }) => {
                 voiceMembers[socketId] = { username: u, muted: false };
             });
             renderMembers();
-            // Create peer connections to everyone already in voice
+            // Existing members will send us offers via voice_user_joined on their end
+            // We just need to be ready to receive — createPeer as non-initiator
             for (const { socketId } of members) {
                 await createPeer(socketId, false);
             }
@@ -898,25 +748,37 @@
         socket.on('voice_offer', async ({ from, offer }) => {
             let pc = peers[from];
             if (!pc) pc = await createPeer(from, false);
-            await pc.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            socket.emit('voice_answer', { to: from, answer });
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                socket.emit('voice_answer', { to: from, answer: pc.localDescription });
+            } catch(e) { console.error('voice_offer error:', e); }
         });
 
         socket.on('voice_answer', async ({ from, answer }) => {
             const pc = peers[from];
-            if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            if (pc && pc.signalingState !== 'stable') {
+                try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); }
+                catch(e) { console.error('voice_answer error:', e); }
+            }
         });
 
         socket.on('voice_ice', async ({ from, candidate }) => {
             const pc = peers[from];
-            if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            if (pc && pc.remoteDescription) {
+                try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+                catch(e) {}
+            }
         });
 
         socket.on('voice_user_left', ({ socketId }) => {
             if (peers[socketId]) { peers[socketId].close(); delete peers[socketId]; }
-            if (audioEls[socketId]) { audioEls[socketId].srcObject = null; audioEls[socketId].remove(); delete audioEls[socketId]; }
+            if (audioEls[socketId]) {
+                audioEls[socketId].srcObject = null;
+                audioEls[socketId].remove();
+                delete audioEls[socketId];
+            }
             delete voiceMembers[socketId];
             renderMembers();
         });
@@ -924,7 +786,7 @@
         socket.on('voice_mute_update', ({ socketId, muted }) => {
             if (voiceMembers[socketId]) { voiceMembers[socketId].muted = muted; renderMembers(); }
         });
-    })();
+    }
     </script>
 </body>
 </html>
