@@ -76,7 +76,7 @@ app.use(express.static(path.join(__dirname)));
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
-        origin: ["https://hatchat.blakrr.works", "http://hatchat.blakrr.works", "*"],
+        origin: ["https://hatchat.blakrr.works", "http://hatchat.blakrr.works", "https://averrgy-github-io.onrender.com", "*"],
         methods: ["GET", "POST"]
     }
 });
