@@ -7,185 +7,77 @@
     <style>
         body {
             font-family: DejaVu Sans Mono, monospace;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            background-color: #121212;
-            color: #e0e0e0;
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column; min-height: 100vh;
+            background-color: #121212; color: #e0e0e0;
         }
-        
         header {
-            background-color: #000;
-            color: white;
+            background-color: #000; color: white;
             padding: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-        
-        nav ul {
-            display: flex;
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-        
-        nav li {
-            margin-left: 1.5rem;
-        }
-        
-        nav a {
-            color: white;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-        
-        nav a:hover {
-            color: #999;
-        }
-        
+        .logo { font-size: 1.5rem; font-weight: bold; }
+        nav ul { display: flex; list-style: none; margin: 0; padding: 0; }
+        nav li { margin-left: 1.5rem; }
+        nav a  { color: white; text-decoration: none; transition: color 0.3s; }
+        nav a:hover { color: #999; }
+
         .main-content {
-            flex: 1;
-            padding: 2rem;
-            max-width: 800px;
-            margin: 0 auto;
-            width: 100%;
-            box-sizing: border-box;
+            flex: 1; padding: 2rem;
+            max-width: 800px; margin: 0 auto;
+            width: 100%; box-sizing: border-box;
         }
-        
         .settings-section {
-            background-color: #1a1a1a;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
+            background-color: #1a1a1a; padding: 1.5rem;
+            border-radius: 8px; margin-bottom: 2rem;
             border: 1px solid #333;
         }
-        
         .settings-section h2 {
-            margin-top: 0;
-            margin-bottom: 1.5rem;
-            border-bottom: 1px solid #333;
-            padding-bottom: 0.5rem;
+            margin-top: 0; margin-bottom: 1.5rem;
+            border-bottom: 1px solid #333; padding-bottom: 0.5rem;
         }
-        
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: bold;
-        }
-        
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
         .form-input {
-            width: 100%;
-            padding: 0.7rem;
-            border: 1px solid #333;
-            border-radius: 4px;
-            font-size: 1rem;
-            box-sizing: border-box;
-            background-color: #2a2a2a;
-            color: #e0e0e0;
-            margin-bottom: 0.5rem;
+            width: 100%; padding: 0.7rem;
+            border: 1px solid #333; border-radius: 4px;
+            font-size: 1rem; box-sizing: border-box;
+            background-color: #2a2a2a; color: #e0e0e0; margin-bottom: 0.5rem;
         }
-        
-        .form-help {
-            font-size: 0.8rem;
-            color: #999;
-            margin-top: 0.3rem;
-        }
-        
+        .form-help { font-size: 0.8rem; color: #999; margin-top: 0.3rem; }
         .form-button {
             padding: 0.7rem 1.5rem;
-            background-color: #333;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            margin-right: 0.5rem;
+            background-color: #333; color: white;
+            border: none; border-radius: 4px;
+            cursor: pointer; font-size: 1rem; margin-right: 0.5rem;
         }
-        
-        .form-button:hover {
-            background-color: #555;
-        }
-        
-        .form-button.danger {
-            background-color: #8B0000;
-        }
-        
-        .form-button.danger:hover {
-            background-color: #A52A2A;
-        }
-        
+        .form-button:hover { background-color: #555; }
+        .form-button.danger { background-color: #8B0000; }
+        .form-button.danger:hover { background-color: #A52A2A; }
         .success-message {
-            background-color: #1b5e20;
-            color: white;
-            padding: 0.7rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-            display: none;
+            background-color: #1b5e20; color: white;
+            padding: 0.7rem; border-radius: 4px; margin-bottom: 1rem; display: none;
         }
-        
         .error-message {
-            background-color: #8B0000;
-            color: white;
-            padding: 0.7rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-            display: none;
+            background-color: #8B0000; color: white;
+            padding: 0.7rem; border-radius: 4px; margin-bottom: 1rem; display: none;
         }
-        
         footer {
-            background-color: #000;
-            color: white;
-            text-align: center;
-            padding: 1rem;
-            margin-top: auto;
+            background-color: #000; color: white;
+            text-align: center; padding: 1rem; margin-top: auto;
         }
-        
-        /* Modal styles */
         .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            justify-content: center;
-            align-items: center;
-            z-index: 200;
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            justify-content: center; align-items: center; z-index: 200;
         }
-        
         .modal-content {
-            background-color: #1a1a1a;
-            padding: 2rem;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
-            border: 1px solid #333;
+            background-color: #1a1a1a; padding: 2rem; border-radius: 8px;
+            width: 90%; max-width: 400px; border: 1px solid #333;
         }
-        
-        .modal-content h2 {
-            margin-top: 0;
-            color: #e0e0e0;
-        }
-        
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            .main-content {
-                padding: 1rem;
-            }
-        }
+        .modal-content h2 { margin-top: 0; color: #e0e0e0; }
+        @media (max-width: 768px) { .main-content { padding: 1rem; } }
     </style>
 </head>
 <body>
@@ -193,170 +85,124 @@
         <div class="logo">hatchat - 1.0.0.7</div>
         <nav>
             <ul>
+                <li><a href="clips.html">clips</a></li>
                 <li><a href="index.html">homepage</a></li>
                 <li><a href="chat.html">hatchat</a></li>
                 <li><a href="settings.html">settings</a></li>
             </ul>
         </nav>
     </header>
-    
+
     <div class="main-content">
         <h1>Account Settings</h1>
-        
+
         <div id="success-message" class="success-message"></div>
-        <div id="error-message" class="error-message"></div>
-        
+        <div id="error-message"   class="error-message"></div>
+
         <div class="settings-section">
             <h2>User Profile</h2>
             <form id="profile-form">
                 <div class="form-group">
                     <label for="username">Username:</label>
                     <input type="text" id="username" class="form-input" maxlength="8" required>
-                    <div class="form-help">Maximum 8 characters. This will be displayed in the chat.</div>
+                    <div class="form-help">Maximum 8 characters. Displayed in chat.</div>
                 </div>
                 <div class="form-group">
                     <label for="color">Message Color:</label>
                     <input type="color" id="color" class="form-input">
-                    <div class="form-help">Choose a color for your messages in the chat.</div>
+                    <div class="form-help">Color for your messages.</div>
                 </div>
                 <button type="submit" class="form-button">Save Profile</button>
                 <button type="button" id="reset-profile" class="form-button">Reset Profile</button>
             </form>
         </div>
-        <h2>Sound Settings</h2>
-        <div class="form-group">
-            <label for="enable-sounds">Enable Typing Sounds:</label>
-            <input type="checkbox" id="enable-sounds">
+
+        <div class="settings-section">
+            <h2>Sound Settings</h2>
+            <div class="form-group">
+                <label for="enable-sounds">Enable Typing Sounds:</label>
+                <input type="checkbox" id="enable-sounds">
+            </div>
         </div>
     </div>
-    
+
     <!-- Confirmation Modal -->
     <div class="modal" id="confirm-modal">
         <div class="modal-content">
             <h2>Confirm Action</h2>
             <p id="confirm-message">Are you sure you want to proceed?</p>
             <button id="confirm-yes" class="form-button">Yes</button>
-            <button id="confirm-no" class="form-button">No</button>
+            <button id="confirm-no"  class="form-button">No</button>
         </div>
     </div>
-    
+
     <footer>
-        <p>&copy; 2025 My Website. All rights reserved.</p>
+        <p>&copy; 2025 hatchat. All rights reserved.</p>
     </footer>
-    
+
     <script>
-        // DOM elements
-        const profileForm = document.getElementById('profile-form');
-        const usernameInput = document.getElementById('username');
-        const colorInput = document.getElementById('color');
-        const resetProfileBtn = document.getElementById('reset-profile');
-        const successMessage = document.getElementById('success-message');
-        const errorMessage = document.getElementById('error-message');
-        const confirmModal = document.getElementById('confirm-modal');
+        const profileForm       = document.getElementById('profile-form');
+        const usernameInput     = document.getElementById('username');
+        const colorInput        = document.getElementById('color');
+        const resetProfileBtn   = document.getElementById('reset-profile');
+        const successMessage    = document.getElementById('success-message');
+        const errorMessage      = document.getElementById('error-message');
+        const confirmModal      = document.getElementById('confirm-modal');
         const confirmMessageText = document.getElementById('confirm-message');
-        const confirmYesBtn = document.getElementById('confirm-yes');
-        const confirmNoBtn = document.getElementById('confirm-no');
+        const confirmYesBtn     = document.getElementById('confirm-yes');
+        const confirmNoBtn      = document.getElementById('confirm-no');
         const enableSoundsCheckbox = document.getElementById('enable-sounds');
-        
-        // Load user settings
+
         document.addEventListener('DOMContentLoaded', () => {
-            const username = localStorage.getItem('chat_username');
-            const color = localStorage.getItem('chat_color');
-            const enableSounds = localStorage.getItem('enable_sounds') === 'true';
-            enableSoundsCheckbox.checked = enableSounds;
-            
-            // If user has saved settings, load them
-            if (username) {
-                usernameInput.value = username;
-            }
-            
-            if (color) {
-                colorInput.value = color;
-            } else {
-                colorInput.value = "#FFFFFF"; // Default color
-            }
+            const u = localStorage.getItem('chat_username');
+            const c = localStorage.getItem('chat_color');
+            const s = localStorage.getItem('enable_sounds') === 'true';
+            if (u) usernameInput.value = u;
+            colorInput.value = c || '#FFFFFF';
+            enableSoundsCheckbox.checked = s;
         });
 
         enableSoundsCheckbox.addEventListener('change', () => {
             localStorage.setItem('enable_sounds', enableSoundsCheckbox.checked);
         });
-        
-        // Show success message
-        function showSuccess(message) {
-            successMessage.textContent = message;
+
+        function showSuccess(msg) {
+            successMessage.textContent = msg;
             successMessage.style.display = 'block';
-            errorMessage.style.display = 'none';
-            
-            // Hide message after 5 seconds
-            setTimeout(() => {
-                successMessage.style.display = 'none';
-            }, 5000);
+            errorMessage.style.display   = 'none';
+            setTimeout(() => { successMessage.style.display = 'none'; }, 5000);
         }
-        
-        // Show error message
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.style.display = 'block';
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorMessage.style.display   = 'block';
             successMessage.style.display = 'none';
-            
-            // Hide message after 5 seconds
-            setTimeout(() => {
-                errorMessage.style.display = 'none';
-            }, 5000);
+            setTimeout(() => { errorMessage.style.display = 'none'; }, 5000);
         }
-        
-        // Show confirmation modal
-        function showConfirmation(message, onConfirm) {
-            confirmMessageText.textContent = message;
+
+        function showConfirmation(msg, onConfirm) {
+            confirmMessageText.textContent = msg;
             confirmModal.style.display = 'flex';
-            
-            // Set up confirm button
-            confirmYesBtn.onclick = () => {
-                onConfirm();
-                confirmModal.style.display = 'none';
-            };
-            
-            // Set up cancel button
-            confirmNoBtn.onclick = () => {
-                confirmModal.style.display = 'none';
-            };
+            confirmYesBtn.onclick = () => { onConfirm(); confirmModal.style.display = 'none'; };
+            confirmNoBtn.onclick  = () => { confirmModal.style.display = 'none'; };
         }
-        
-        // Handle profile form submission
+
         profileForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            
-            const username = usernameInput.value.trim();
-            const color = colorInput.value;
-            
-            if (username.length === 0) {
-                showError('Username cannot be empty');
-                return;
-            }
-            
-            if (username.length > 8) {
-                showError('Username must be 8 characters or less');
-                return;
-            }
-            
-            // Save user settings to localStorage
-            localStorage.setItem('chat_username', username);
-            localStorage.setItem('chat_color', color);
-            
+            const u = usernameInput.value.trim();
+            if (!u)          { showError('Username cannot be empty'); return; }
+            if (u.length > 8){ showError('Username must be 8 characters or less'); return; }
+            localStorage.setItem('chat_username', u);
+            localStorage.setItem('chat_color', colorInput.value);
             showSuccess('Profile updated successfully');
         });
-        
-        // Handle reset profile button
+
         resetProfileBtn.addEventListener('click', () => {
             showConfirmation('Are you sure you want to reset your profile?', () => {
-                // Clear localStorage items related to profile
                 localStorage.removeItem('chat_username');
                 localStorage.removeItem('chat_color');
-                
-                // Reset form
                 usernameInput.value = '';
-                colorInput.value = '#FFFFFF';
-                
+                colorInput.value    = '#FFFFFF';
                 showSuccess('Profile has been reset');
             });
         });
