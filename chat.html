@@ -11,17 +11,19 @@
         <div class="logo">hatchat - 1.0.0.7</div>
         <nav>
             <ul>
+                <!-- clips sits to the left of homepage, as requested -->
+                <li><a href="clips.html">clips</a></li>
                 <li><a href="index.html">homepage</a></li>
                 <li><a href="chat.html">hatchat</a></li>
                 <li><a href="settings.html">settings</a></li>
             </ul>
         </nav>
     </header>
-    
+
     <div class="load-more-container">
         <button id="load-more-btn" class="load-more-btn">Load Earlier Messages</button>
     </div>
-    
+
     <div class="main-content">
         <div class="user-list">
             <div class="dnd-toggle-container">
@@ -30,31 +32,38 @@
                 </label>
             </div>
             <h3>fellow hattingtons</h3>
-            <div class="online-users" id="online-users">
-                <!-- Online users will be added here -->
-            </div>
+            <div class="online-users" id="online-users"></div>
         </div>
-        
+
         <div class="chat-container">
             <div class="chat-header">
                 <h2>Live Chat</h2>
                 <p id="connection-status">Connecting...</p>
             </div>
+
             <div class="chat-messages" id="chat-messages">
                 <div class="loading-indicator" id="loading-indicator"></div>
-                <!-- Messages will be added here -->
             </div>
+
+            <!-- Reply preview bar — hidden until a user clicks ↩ on a message -->
+            <div class="reply-preview" id="reply-preview">
+                <span class="reply-preview-label">↩ replying to</span>
+                <span class="reply-preview-text" id="reply-preview-text"></span>
+                <button class="reply-cancel-btn" id="reply-cancel-btn" title="Cancel reply">✕</button>
+            </div>
+
             <form class="chat-form" id="chat-form">
-                <input type="text" class="chat-input" id="chat-input" placeholder="Type your message..." autocomplete="off">
+                <input type="text" class="chat-input" id="chat-input"
+                       placeholder="Type your message..." autocomplete="off">
                 <label for="image-upload" class="upload-btn">
                     <span class="upload-icon">📷</span>
                 </label>
-                <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                <input type="file" id="image-upload" accept="image/*" style="display:none">
                 <button type="submit" class="chat-button">Send</button>
             </form>
         </div>
     </div>
-    
+
     <!-- Username Modal -->
     <div class="modal" id="username-modal">
         <div class="modal-content">
@@ -62,7 +71,8 @@
             <form id="username-form">
                 <div class="form-group">
                     <label for="username-input">Username:</label>
-                    <input type="text" class="form-input" id="username-input" placeholder="Your username" required>
+                    <input type="text" class="form-input" id="username-input"
+                           placeholder="Your username" required>
                 </div>
                 <div class="form-group">
                     <label for="color-input">Message Color:</label>
@@ -72,965 +82,654 @@
             </form>
         </div>
     </div>
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script>
-        // Initialize variables
-        let username = '';
-        let socket;
-        let currentPage = 1;
-        let isLoading = false;
-        let lastMessageSender = null; // Track the last message sender
-        let selectedImage = null;
-        let isUploading = false;
-        let isDndEnabled = false;  // Initialize here
-        
-        // DOM elements
-        const chatMessages = document.getElementById('chat-messages');
-        const chatForm = document.getElementById('chat-form');
-        const chatInput = document.getElementById('chat-input');
-        const onlineUsers = document.getElementById('online-users');
-        const usernameModal = document.getElementById('username-modal');
-        const usernameForm = document.getElementById('username-form');
-        const usernameInput = document.getElementById('username-input');
-        const connectionStatus = document.getElementById('connection-status');
-        const loadMoreBtn = document.getElementById('load-more-btn');
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const colorInput = document.getElementById('color-input');
-        const dndToggle = document.getElementById('dnd-toggle');
-        const notificationSound = new Audio();
-        const emojiMap = {
-            ':smile:': '🙂',
-            ':heart:': '❤️',
-            ':tongue:': '👅',
-            ':green_square:': '🟩',
-            ':anatomical_heart:': '🫀 (ANATOMICAL HEART!!!)',
-            ':locomotive:': '🚂',
-            ':train:': '🚂',
-            ':horse:': '🐎',
-            ':fish:': '🐟',
-            ':nerd:': '🤓'
-            // Add more emojis here
-        };
-        
-        function replaceEmojis(text) {
-            return text.replace(/:\w+:/g, match => emojiMap[match] || match);
-        }
+    // ── State ──────────────────────────────────────────────────────────────
+    let username       = '';
+    let socket;
+    let currentPage    = 1;
+    let isLoading      = false;
+    let lastMessageSender = null;
+    let selectedImage  = null;
+    let isUploading    = false;
+    let isDndEnabled   = false;
+    let userColors     = {};
 
-        // Store user colors - now shared from server
-        let userColors = {};
-        
-        // Show username modal on page load or use stored username
-        window.addEventListener('DOMContentLoaded', () => {
-            const storedUsername = localStorage.getItem('chat_username');
-            const storedColor = localStorage.getItem('chat_color') || '#FFFFFF';
-            
-            if (storedUsername) {
-                // Use stored username and color
-                username = storedUsername;
-                if (colorInput) {
-                    colorInput.value = storedColor;
+    // replyingTo holds the message the user wants to reply to.
+    // Shape: { username, message, color }   — or null when not replying.
+    let replyingTo = null;
+
+    // ── DOM refs ──────────────────────────────────────────────────────────
+    const chatMessages    = document.getElementById('chat-messages');
+    const chatForm        = document.getElementById('chat-form');
+    const chatInput       = document.getElementById('chat-input');
+    const onlineUsers     = document.getElementById('online-users');
+    const usernameModal   = document.getElementById('username-modal');
+    const usernameForm    = document.getElementById('username-form');
+    const usernameInput   = document.getElementById('username-input');
+    const connectionStatus = document.getElementById('connection-status');
+    const loadMoreBtn     = document.getElementById('load-more-btn');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const colorInput      = document.getElementById('color-input');
+    const dndToggle       = document.getElementById('dnd-toggle');
+    const replyPreview    = document.getElementById('reply-preview');
+    const replyPreviewText = document.getElementById('reply-preview-text');
+    const replyCancelBtn  = document.getElementById('reply-cancel-btn');
+    const notificationSound = new Audio();
+
+    // ── Emoji map ─────────────────────────────────────────────────────────
+    const emojiMap = {
+        ':smile:'           : '🙂',
+        ':heart:'           : '❤️',
+        ':tongue:'          : '👅',
+        ':green_square:'    : '🟩',
+        ':anatomical_heart:': '🫀 (ANATOMICAL HEART!!!)',
+        ':locomotive:'      : '🚂',
+        ':train:'           : '🚂',
+        ':horse:'           : '🐎',
+        ':fish:'            : '🐟',
+        ':nerd:'            : '🤓'
+    };
+
+    function replaceEmojis(text) {
+        return text.replace(/:\w+:/g, match => emojiMap[match] || match);
+    }
+
+    // ── Reply helpers ─────────────────────────────────────────────────────
+    // setReply is called when the user clicks ↩ on any message.
+    // We store the target message's data and show the preview bar.
+    function setReply(data) {
+        replyingTo = data; // { username, message, color }
+        const preview = data.message
+            ? `${data.username}: ${data.message.substring(0, 80)}${data.message.length > 80 ? '…' : ''}`
+            : `${data.username}: [image]`;
+        replyPreviewText.textContent = preview;
+        replyPreview.style.display = 'flex';
+        chatInput.focus();
+    }
+
+    function clearReply() {
+        replyingTo = null;
+        replyPreview.style.display = 'none';
+        replyPreviewText.textContent = '';
+    }
+
+    replyCancelBtn.addEventListener('click', clearReply);
+
+    // ── Timestamp formatter ───────────────────────────────────────────────
+    function formatTimestamp(timestamp) {
+        return new Date(timestamp).toLocaleString();
+    }
+
+    // ── Init on page load ─────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+        const storedUsername = localStorage.getItem('chat_username');
+        const storedColor    = localStorage.getItem('chat_color') || '#FFFFFF';
+
+        if (storedUsername) {
+            username = storedUsername;
+            if (colorInput) colorInput.value = storedColor;
+            initializeChat(storedColor);
+        } else {
+            usernameModal.style.display = 'flex';
+        }
+    });
+
+    usernameForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const entered = usernameInput.value.trim();
+        if (entered.length > 8) { alert('Username must be 8 characters or less.'); return; }
+        if (!entered) return;
+
+        username = entered;
+        const selectedColor = document.getElementById('color-input').value;
+        localStorage.setItem('chat_username', username);
+        localStorage.setItem('chat_color', selectedColor);
+        usernameModal.style.display = 'none';
+        initializeChat(selectedColor);
+    });
+
+    // ── Chat initialisation ───────────────────────────────────────────────
+    function initializeChat(selectedColor) {
+        socket = io('https://averrgy-github-io.onrender.com', {
+            query: { username, color: selectedColor },
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000
+        });
+
+        // ── Incoming chat message ────────────────────────────────────────
+        socket.on('chat_message', (data) => {
+            displayMessage(data.username, data.message, data.timestamp,
+                           data.color, data.image, data.replyTo);
+            if (data.image) socket.emit('image_posted');
+        });
+
+        socket.on('scroll_to_latest', () => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        // ── Connection events ────────────────────────────────────────────
+        socket.on('connect', () => {
+            connectionStatus.textContent = 'Connected';
+            connectionStatus.style.color = '#4CAF50';
+            socket.emit('user_join', { username });
+            loadMessages(1);
+        });
+
+        socket.on('disconnect', () => {
+            connectionStatus.textContent = 'Disconnected';
+            connectionStatus.style.color = '#ff6b6b';
+        });
+
+        // ── Message history ──────────────────────────────────────────────
+        socket.on('chat_history', (data) => {
+            loadingIndicator.style.display = 'none';
+            isLoading = false;
+
+            if (data.userColors) userColors = data.userColors;
+
+            if (currentPage === 1) {
+                chatMessages.innerHTML = '';
+                lastMessageSender = null;
+            }
+
+            const messagesArray = [];
+
+            data.messages.forEach((msg, index) => {
+                if (msg.type === 'system') {
+                    messagesArray.push(createSystemMessageElement(msg.message, msg.timestamp));
+                    lastMessageSender = null;
+                } else {
+                    // A message with a reply is always shown as a non-continuation
+                    // so the sender header is always visible above the quote block.
+                    let isContinuation = false;
+                    if (currentPage > 1 && index > 0 && !msg.replyTo) {
+                        const prev = data.messages[index - 1];
+                        isContinuation = prev.type !== 'system' && prev.username === msg.username;
+                    }
+                    const msgColor = msg.color || userColors[msg.username];
+                    messagesArray.push(
+                        createMessageElement(msg.username, msg.message, msg.timestamp,
+                                             isContinuation, msgColor, msg.image, msg.replyTo)
+                    );
                 }
-                
-                // Start the chat with stored values
-                initializeChat(storedColor);
+            });
+
+            // For the first page the server sends newest→oldest, so we reverse.
+            if (currentPage === 1) {
+                messagesArray.reverse();
+                recalcContinuations(messagesArray);
+
+                // Track last sender for future incoming messages
+                for (let i = messagesArray.length - 1; i >= 0; i--) {
+                    const el = messagesArray[i];
+                    if (!el.classList.contains('system-message')) {
+                        const sEl = el.querySelector('.message-sender');
+                        if (sEl) { lastMessageSender = sEl.getAttribute('data-sender'); break; }
+                    }
+                }
             } else {
-                // Show username modal if no stored username
-                usernameModal.style.display = 'flex';
+                recalcContinuations(messagesArray);
             }
-        });
-        
-        // Handle username submission
-        usernameForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const enteredUsername = usernameInput.value.trim();
-            const selectedColor = document.getElementById('color-input').value;
-            
-            if (enteredUsername.length > 8) {
-                alert("Username must be 8 characters or less.");
-                return;
-            }
-            
-            username = enteredUsername;
-            
-            if (username) {
-                // Store username and color in localStorage
-                localStorage.setItem('chat_username', username);
-                localStorage.setItem('chat_color', selectedColor);
-                
-                usernameModal.style.display = 'none';
-                initializeChat(selectedColor);
-            }
-        });
-        
-        // Format timestamp
-        function formatTimestamp(timestamp) {
-            const date = new Date(timestamp);
-            return date.toLocaleString();
-        }
-        
-        function initializeChat(selectedColor) {
-            // Connect to the Socket.IO server with the username and color
-            socket = io('https://averrgy-github-io.onrender.com', {
-                query: {
-                    username,
-                    color: selectedColor
-                },
-                reconnection: true,
-                reconnectionAttempts: 5,
-                reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000
-            });
 
-            socket.on('chat_message', (data) => {
-                console.log('Received message data:', data);
-                displayMessage(data.username, data.message, data.timestamp, data.color, data.image);
-                
-                // If the message contains an image, emit an event to notify server
-                // that everyone should scroll to the bottom
-                if (data.image) {
-                    socket.emit('image_posted');
-                }
-            });
+            const fragment = document.createDocumentFragment();
+            messagesArray.forEach(el => fragment.appendChild(el));
 
-            socket.on('scroll_to_latest', () => {
-                // Force scroll to the bottom when an image is posted by anyone
+            if (currentPage === 1) {
+                chatMessages.appendChild(fragment);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-            });
-            
-            // Setup image upload after socket connection
-            setupImageUpload();
+            } else {
+                chatMessages.insertBefore(fragment, chatMessages.firstChild);
+            }
 
-            // Add this after setupImageUpload() function call in initializeChat function
-            setupClipboardPaste();
-            
-            // Add this function to handle clipboard paste
-            function setupClipboardPaste() {
-                // Listen for paste events on the chat input
-                chatInput.addEventListener('paste', handlePaste);
-                
-                // Alternatively, listen for paste events anywhere in the document
-                // document.addEventListener('paste', handlePaste);
+            loadMoreBtn.disabled = (data.messages.length < 20);
+        });
+
+        // ── User events ──────────────────────────────────────────────────
+        socket.on('user_join', (data) => {
+            displaySystemMessage(`${data.username} has joined the chat`, new Date().toISOString());
+            if (data.userColors) userColors = data.userColors;
+            updateOnlineUsers(data.users);
+        });
+
+        socket.on('user_leave', (data) => {
+            displaySystemMessage(`${data.username} has left the chat`, new Date().toISOString());
+            if (data.userColors) userColors = data.userColors;
+            updateOnlineUsers(data.users);
+        });
+
+        socket.on('update_users',  (data) => updateOnlineUsers(data.users));
+
+        socket.on('update_colors', (data) => {
+            if (data.userColors) {
+                userColors = data.userColors;
+                updateDisplayedColors();
             }
-            
-            function handlePaste(e) {
-                // Check if the paste event has any image items
-                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-                
-                for (let i = 0; i < items.length; i++) {
-                    if (items[i].type.indexOf('image') !== -1) {
-                        // Get the image file from clipboard
-                        const file = items[i].getAsFile();
-                        
-                        // Check file size (5MB max)
-                        if (file.size > 5 * 1024 * 1024) {
-                            alert('Pasted image is too large. Max size is 5MB.');
-                            return;
-                        }
-                        
-                        // Store the pasted image and update UI
-                        selectedImage = file;
-                        chatInput.placeholder = `Image pasted. Type a message (optional) and press send.`;
-                        
-                        // Optionally show a preview of the pasted image
-                        showImagePreview(file);
-                        
-                        // Prevent the default paste action
-                        e.preventDefault();
-                        return;
-                    }
-                }
-            }
-            
-            // Socket events
-            socket.on('connect', () => {
-                connectionStatus.textContent = 'Connected';
-                connectionStatus.style.color = '#4CAF50';
-                
-                // Notify the server of a new user
-                socket.emit('user_join', { username });
-                
-                // Request message history
-                loadMessages(1);
-            });
-            
-            socket.on('disconnect', () => {
-                connectionStatus.textContent = 'Disconnected';
-                connectionStatus.style.color = '#ff6b6b';
-            });
-            
-            
-            socket.on('chat_history', (data) => {
-                loadingIndicator.style.display = 'none';
-                isLoading = false;
-                
-                // Update user colors from server
-                if (data.userColors) {
-                    userColors = data.userColors;
-                }
-                
-                if (currentPage === 1) {
-                    // Clear existing messages if this is the first page
-                    chatMessages.innerHTML = '';
-                    lastMessageSender = null; // Reset last sender
-                }
-                
-                // Create a temporary container for messages
-                const fragment = document.createDocumentFragment();
-                const messagesArray = [];
-                
-                // Process messages
-                data.messages.forEach((msg, index) => {
-                    if (msg.type === 'system') {
-                        const messageDiv = createSystemMessageElement(msg.message, msg.timestamp);
-                        messagesArray.push(messageDiv);
-                        lastMessageSender = null; // System message resets the sender tracking
-                    } else {
-                        // For regular messages, check if we need to create a new message group
-                        let isContinuation = false;
-                        
-                        // Skip continuity check for first page since we're showing newest messages
-                        if (currentPage > 1 && index > 0) {
-                            const prevMsg = data.messages[index - 1];
-                            isContinuation = prevMsg.type !== 'system' && prevMsg.username === msg.username;
-                        }
-                        
-                        // Use the color from the message if available, otherwise from userColors
-                        const messageColor = msg.color || userColors[msg.username];
-                        // Pass the image if available
-                        const messageDiv = createMessageElement(msg.username, msg.message, msg.timestamp, isContinuation, messageColor, msg.image);
-                        messagesArray.push(messageDiv);
-                    }
-                });
-                
-                // If loading the first page (newest messages), reverse the order
-                if (currentPage === 1) {
-                    messagesArray.reverse();
-                    
-                    // For first page (newest messages), we need to check continuations in reverse
-                    if (messagesArray.length > 0) {
-                        let currentSender = null;
-                        
-                        // Process from bottom to top (oldest to newest in the view)
-                        for (let i = 0; i < messagesArray.length; i++) {
-                            const messageDiv = messagesArray[i];
-                            
-                            // Skip system messages
-                            if (messageDiv.classList.contains('system-message')) {
-                                currentSender = null;
-                                continue;
-                            }
-                            
-                            // Get the sender of this message
-                            const senderEl = messageDiv.querySelector('.message-sender');
-                            if (!senderEl) continue;
-                            
-                            const sender = senderEl.getAttribute('data-sender');
-                            
-                            // If this is a continuation from the previous message
-                            if (currentSender === sender && i > 0) {
-                                messageDiv.classList.add('continued-message');
-                                // Hide the sender info
-                                const messageInfo = messageDiv.querySelector('.message-info');
-                                if (messageInfo) {
-                                    messageInfo.style.display = 'none';
-                                }
-                            }
-                            
-                            currentSender = sender;
-                        }
-                        
-                        // Set the last message sender for future messages
-                        if (messagesArray.length > 0) {
-                            const lastMessage = messagesArray[messagesArray.length - 1];
-                            if (!lastMessage.classList.contains('system-message')) {
-                                const senderEl = lastMessage.querySelector('.message-sender');
-                                if (senderEl) {
-                                    lastMessageSender = senderEl.getAttribute('data-sender');
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // For older pages, process continuations normally (top to bottom)
-                    let currentSender = null;
-                    
-                    for (let i = 0; i < messagesArray.length; i++) {
-                        const messageDiv = messagesArray[i];
-                        
-                        // Skip system messages
-                        if (messageDiv.classList.contains('system-message')) {
-                            currentSender = null;
-                            continue;
-                        }
-                        
-                        // Get the sender of this message
-                        const senderEl = messageDiv.querySelector('.message-sender');
-                        if (!senderEl) continue;
-                        
-                        const sender = senderEl.getAttribute('data-sender');
-                        
-                        // If this is a continuation from the previous message
-                        if (currentSender === sender && i > 0) {
-                            messageDiv.classList.add('continued-message');
-                            // Hide the sender info
-                            const messageInfo = messageDiv.querySelector('.message-info');
-                            if (messageInfo) {
-                                messageInfo.style.display = 'none';
-                            }
-                        }
-                        
-                        currentSender = sender;
-                    }
-                }
-                
-                // Append all messages to the fragment
-                messagesArray.forEach(element => {
-                    fragment.appendChild(element);
-                });
-                
-                // Add all messages to the chat
-                if (currentPage === 1) {
-                    chatMessages.appendChild(fragment);
-                } else {
-                    chatMessages.insertBefore(fragment, chatMessages.firstChild);
-                }
-                
-                // If no more messages to load, disable the load more button
-                if (data.messages.length < 20) {  // Assuming 20 is the page size on the server
-                    loadMoreBtn.disabled = true;
-                } else {
-                    loadMoreBtn.disabled = false;
-                }
-                
-                // If this is the first load, scroll to the bottom
-                if (currentPage === 1) {
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                }
-            });
-            
-            socket.on('user_join', (data) => {
-                displaySystemMessage(`${data.username} has joined the chat`, new Date().toISOString());
-                
-                // Update user colors from server
-                if (data.userColors) {
-                    userColors = data.userColors;
-                }
-                
-                updateOnlineUsers(data.users);
-            });
-            
-            socket.on('user_leave', (data) => {
-                displaySystemMessage(`${data.username} has left the chat`, new Date().toISOString());
-                
-                // Update user colors from server
-                if (data.userColors) {
-                    userColors = data.userColors;
-                }
-                
-                updateOnlineUsers(data.users);
-            });
-            
-            socket.on('update_users', (data) => {
-                updateOnlineUsers(data.users);
-            });
-            
-            socket.on('update_colors', (data) => {
-                // Update user colors from server
-                if (data.userColors) {
-                    userColors = data.userColors;
-                    
-                    // Update displayed colors for existing messages
-                    updateDisplayedColors();
-                }
-            });
-            
-            // Load more messages button
-            loadMoreBtn.addEventListener('click', () => {
-                if (!isLoading) {
-                    currentPage++;
-                    loadMessages(currentPage);
-                }
-            });
-            
-            // Color input change event
-            document.getElementById('color-input').addEventListener('change', (e) => {
-                const newColor = e.target.value;
-                socket.emit('update_color', { color: newColor });
-            });
-            
-            // DND toggle event
-            dndToggle.addEventListener('change', () => {
-                isDndEnabled = dndToggle.checked;
-                
-                // Notify the server about the DND status change
-                if (socket) {
-                    socket.emit('dnd_toggle', isDndEnabled);
-                }
-            });
-        }
-        
-        // Update displayed colors for existing messages
-        function updateDisplayedColors() {
-            const messageElements = document.querySelectorAll('.message');
-            messageElements.forEach(messageDiv => {
-                const senderEl = messageDiv.querySelector('.message-sender');
-                if (!senderEl) return;
-                
-                const sender = senderEl.getAttribute('data-sender');
-                if (userColors[sender]) {
-                    // Update sender color
-                    senderEl.style.color = userColors[sender];
-                    
-                    // Update message content color
-                    const contentEl = messageDiv.querySelector('.message-content');
-                    if (contentEl) {
-                        contentEl.style.color = userColors[sender];
-                    }
-                }
-            });
-        }
-        
-        // Load messages from the server
-        function loadMessages(page) {
-            if (isLoading) return;
-            
-            isLoading = true;
-            loadingIndicator.style.display = 'flex';
-            
-            socket.emit('load_messages', { page });
-        }
-        
-        // Set up image upload functionality
-        function setupImageUpload() {
-            const imageUpload = document.getElementById('image-upload');
-            
-            // Handle image selection
-            imageUpload.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                // Check if file is an image
-                if (!file.type.startsWith('image/')) {
-                    alert('Please select an image file.');
-                    this.value = '';
+        });
+
+        // ── UI controls ──────────────────────────────────────────────────
+        loadMoreBtn.addEventListener('click', () => {
+            if (!isLoading) { currentPage++; loadMessages(currentPage); }
+        });
+
+        document.getElementById('color-input').addEventListener('change', (e) => {
+            socket.emit('update_color', { color: e.target.value });
+        });
+
+        dndToggle.addEventListener('change', () => {
+            isDndEnabled = dndToggle.checked;
+            if (socket) socket.emit('dnd_toggle', isDndEnabled);
+        });
+
+        // ── Image upload setup ───────────────────────────────────────────
+        setupImageUpload();
+
+        // ── Clipboard paste (images) ─────────────────────────────────────
+        chatInput.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file.size > 5 * 1024 * 1024) { alert('Pasted image is too large. Max 5MB.'); return; }
+                    selectedImage = file;
+                    chatInput.placeholder = 'Image pasted. Type a message (optional) and press send.';
+                    showImagePreview(file);
+                    e.preventDefault();
                     return;
                 }
-                
-                // Check file size (5MB max)
-                if (file.size > 5 * 1024 * 1024) {
-                    alert('Please select an image smaller than 5MB.');
-                    this.value = '';
-                    return;
-                }
-                
-                // Store the selected file
-                selectedImage = file;
-                
-                // Notify user that an image is ready to send
-                chatInput.placeholder = `Image "${file.name}" selected. Type a message (optional) and press send.`;
-            });
-            
-            // Set up the form submission event handler for images and messages
-            chatForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const message = chatInput.value.trim();
-                
-                // If no message and no image, do nothing
-                if (!message && !selectedImage) return;
-                
-                if (socket && !isUploading) {
-                    // If there's an image, upload it first
-                    if (selectedImage) {
-                        isUploading = true;
-                        
-                        // Show upload indicator
-                        const loader = document.createElement('div');
-                        loader.className = 'image-loader';
-                        chatForm.appendChild(loader);
-                        
-                        // Create form data for the upload
-                        const formData = new FormData();
-                        formData.append('image', selectedImage);
-                        
-                        try {
-                            // Upload the image
-                            const response = await fetch('https://averrgy-github-io.onrender.com/upload', {
-                                method: 'POST',
-                                body: formData,
-                                credentials: 'same-origin',
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                }
-                            });
-                            
-                            // Check if response is OK
-                            if (!response.ok) {
-                                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-                            }
-                            
-                            // Check content type before parsing JSON
-                            const contentType = response.headers.get('content-type');
-                            if (!contentType || !contentType.includes('application/json')) {
-                                throw new Error('Server did not return JSON');
-                            }
-                            
-                            const result = await response.json();
-                            
-                            if (result.success) {
-                                // Convert relative path to absolute URL if needed
-                                let imagePath = result.filePath;
-                                if (imagePath && !imagePath.startsWith('http')) {
-                                    // If it's a relative path, convert it to absolute
-                                    const baseUrl = 'https://averrgy-github-io.onrender.com';
-                                    imagePath = baseUrl + (imagePath.startsWith('/') ? '' : '/') + imagePath;
-                                }
-                                
-                                // Send message with image path
-                                socket.emit('chat_message', { 
-                                    message: message,
-                                    image: imagePath
-                                });
+            }
+        });
+    }
 
-                            } else {
-                                alert('Failed to upload image: ' + (result.message || 'Unknown error'));
-                            }
-                        } catch (error) {
-                            console.error('Upload error:', error);
-                            let errorMessage = 'Error uploading image.';
-                            if (error.message) {
-                                errorMessage += ' ' + error.message;
-                            }
-                            if (!navigator.onLine) {
-                                errorMessage = 'You appear to be offline. Please check your connection.';
-                            }
-                            alert(errorMessage);
-                        } finally {
-                            // Clean up
-                            isUploading = false;
-                            selectedImage = null;
-                            chatInput.placeholder = 'Type your message...';
-                            chatForm.removeChild(loader);
-                        }
-                    } else {
-                        // Send text message only
-                        socket.emit('chat_message', { message });
-                    }
-                    
-                    // Clear input
-                    chatInput.value = '';
-                    document.getElementById('image-upload').value = '';
-                    chatInput.focus();
-                }
-            });
-        }
-        
-        // Create message element with username side by side with message
-        // Modify the createMessageElement function to not show timestamps with images
-        function createMessageElement(sender, message, timestamp, isContinuation = false, color, image = null) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message';
-            
-            // Create username area (always 8 characters wide plus separator)
-            const usernameArea = document.createElement('div');
-            usernameArea.className = 'username-area';
-            
-            if (!isContinuation) {
-                // Create sender element
-                const senderElement = document.createElement('span');
-                senderElement.className = 'message-sender';
-                senderElement.setAttribute('data-sender', sender);
-                senderElement.textContent = sender;
-                
-                // Apply username color
-                if (color) {
-                    senderElement.style.color = color;
-                } else if (userColors[sender]) {
-                    senderElement.style.color = userColors[sender];
-                }
-                
-                // Add separator
-                const separatorElement = document.createElement('span');
-                separatorElement.className = 'message-separator';
-                separatorElement.textContent = ' ~ ';
-                
-                // Assemble username area
-                usernameArea.appendChild(senderElement);
-                usernameArea.appendChild(separatorElement);
+    // ── Recalculate continuation markers on a batch of DOM elements ───────
+    // Called after sorting / reversing so the "continued-message" CSS class
+    // (which hides the sender label) is only applied when the same person
+    // sends multiple messages in a row, and NOT when there's a replyTo block.
+    function recalcContinuations(elements) {
+        let prevSender = null;
+        elements.forEach(el => {
+            if (el.classList.contains('system-message')) { prevSender = null; return; }
+            const sEl = el.querySelector('.message-sender');
+            // Never treat a reply as a continuation — the quote block needs the header
+            const hasReply = el.querySelector('.reply-quote');
+            if (!sEl) return;
+            const sender = sEl.getAttribute('data-sender');
+            if (prevSender === sender && !hasReply) {
+                el.classList.add('continued-message');
+                const info = el.querySelector('.message-info');
+                if (info) info.style.display = 'none';
+            } else {
+                el.classList.remove('continued-message');
             }
-            
-            messageDiv.appendChild(usernameArea);
-            
-            // Create message content
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
-        
-            // Only add timestamp for text messages (no image), and not for continued messages
-            if (!isContinuation && timestamp && !image) {
-                const timestampElement = document.createElement('span');
-                timestampElement.className = 'timestamp';
-                timestampElement.textContent = formatTimestamp(timestamp);
-                messageContent.appendChild(timestampElement);
-            }
-            
-            // Add text message if present
-            if (message && message.length > 0) {
-                messageContent.textContent = message;
-            }
-            
-            // Add image if present
-            if (image) {
-                const imgElement = document.createElement('img');
-                imgElement.src = image;
-                imgElement.className = 'message-image';
-                imgElement.alt = 'Shared image';
-                imgElement.onerror = function() {
-                    imgElement.src = 'fallback-image.png'; // Create a fallback image
-                    imgElement.alt = 'Image failed to load';
-                };
-                
-                // Add click event to open image in new tab
-                imgElement.addEventListener('click', function() {
-                    window.open(image, '_blank');
-                });
-                
-                // If there's a text message, add line break before image
-                if (message && message.length > 0) {
-                    messageContent.appendChild(document.createElement('br'));
-                }
-                
-                messageContent.appendChild(imgElement);
-            }
-                        
-            // Apply message color for the actual content
-            if (color) {
-                messageContent.style.color = color;
-            } else if (userColors[sender]) {
-                messageContent.style.color = userColors[sender];
-            }
-            
-            messageDiv.appendChild(messageContent);
-            
-            return messageDiv;
-        }
-        
-        // Update the send message logic to emit image notification
-        // Update the chat form submission event handler to replace emojis before sending the message
-        chatForm.addEventListener('submit', async function(e) {
+            prevSender = sender;
+        });
+    }
+
+    // ── Load messages from server ─────────────────────────────────────────
+    function loadMessages(page) {
+        if (isLoading) return;
+        isLoading = true;
+        loadingIndicator.style.display = 'flex';
+        socket.emit('load_messages', { page });
+    }
+
+    // ── Image upload form handler ─────────────────────────────────────────
+    // IMPORTANT: This is the ONE AND ONLY submit handler.
+    // The original code had two — a bug that fired every send twice.
+    // This version handles text, images, emojis, and replies together.
+    function setupImageUpload() {
+        const imageUpload = document.getElementById('image-upload');
+
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { alert('Please select an image file.'); imageUpload.value = ''; return; }
+            if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5 MB.'); imageUpload.value = ''; return; }
+            selectedImage = file;
+            chatInput.placeholder = `Image "${file.name}" selected. Type a message (optional) and send.`;
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            let message = chatInput.value.trim();
 
-            // Replace emojis in the message
-            message = replaceEmojis(message);
+            // Replace emoji shortcodes in the typed text
+            let message = replaceEmojis(chatInput.value.trim());
 
-            // If no message and no image, do nothing
             if (!message && !selectedImage) return;
+            if (!socket || isUploading) return;
 
-            if (socket && !isUploading) {
-                // If there's an image, upload it first
-                if (selectedImage) {
-                    isUploading = true;
+            // Snapshot the current reply target before we might clear it
+            const currentReply = replyingTo ? { ...replyingTo } : null;
 
-                    // Show upload indicator
-                    const loader = document.createElement('div');
-                    loader.className = 'image-loader';
-                    chatForm.appendChild(loader);
+            if (selectedImage) {
+                // ── Image path ──────────────────────────────────────────
+                isUploading = true;
 
-                    // Create form data for the upload
-                    const formData = new FormData();
-                    formData.append('image', selectedImage);
+                const loader = document.createElement('div');
+                loader.className = 'image-loader';
+                chatForm.appendChild(loader);
 
-                    try {
-                        // Upload the image
-                        const response = await fetch('https://averrgy-github-io.onrender.com/upload', {
-                            method: 'POST',
-                            body: formData,
-                            credentials: 'same-origin',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                            }
-                        });
+                const formData = new FormData();
+                formData.append('image', selectedImage);
 
-                        // Check if response is OK
-                        if (!response.ok) {
-                            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-                        }
-
-                        // Check content type before parsing JSON
-                        const contentType = response.headers.get('content-type');
-                        if (!contentType || !contentType.includes('application/json')) {
-                            throw new Error('Server did not return JSON');
-                        }
-
-                        const result = await response.json();
-
-                        if (result.success) {
-                            // Convert relative path to absolute URL if needed
-                            let imagePath = result.filePath;
-                            if (imagePath && !imagePath.startsWith('http')) {
-                                // If it's a relative path, convert it to absolute
-                                const baseUrl = 'https://averrgy-github-io.onrender.com';
-                                imagePath = baseUrl + (imagePath.startsWith('/') ? '' : '/') + imagePath;
-                            }
-
-                            // Send message with image path
-                            socket.emit('chat_message', { 
-                                message: message,
-                                image: imagePath
-                            });
-                        } else {
-                            alert('Failed to upload image: ' + (result.message || 'Unknown error'));
-                        }
-                    } catch (error) {
-                        console.error('Upload error:', error);
-                        let errorMessage = 'Error uploading image.';
-                        if (error.message) {
-                            errorMessage += ' ' + error.message;
-                        }
-                        if (!navigator.onLine) {
-                            errorMessage = 'You appear to be offline. Please check your connection.';
-                        }
-                        alert(errorMessage);
-                    } finally {
-                        // Clean up
-                        isUploading = false;
-                        selectedImage = null;
-                        chatInput.placeholder = 'Type your message...';
-                        chatForm.removeChild(loader);
-                    }
-                } else {
-                    // Send text message only
-                    socket.emit('chat_message', { message });
-                }
-
-                // Clear input
-                chatInput.value = '';
-                document.getElementById('image-upload').value = '';
-                chatInput.focus();
-            }
-        });
-        
-        // Create system message element
-        function createSystemMessageElement(message, timestamp) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'system-message';
-            
-            // Add message text
-            messageDiv.textContent = message;
-            
-            // Add timestamp if available
-            if (timestamp) {
-                const timestampElement = document.createElement('span');
-                timestampElement.className = 'timestamp';
-                timestampElement.textContent = formatTimestamp(timestamp);
-                messageDiv.appendChild(timestampElement);
-            }
-            
-            return messageDiv;
-        }
-        
-        // Display message in the chat
-        function displayMessage(sender, message, timestamp, color, image = null) {
-            const isContinuation = (sender === lastMessageSender);
-            const messageDiv = createMessageElement(sender, message, timestamp, isContinuation, color, image);
-            
-            chatMessages.appendChild(messageDiv);
-            lastMessageSender = sender;
-            
-            // Always scroll to bottom for new messages
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            if (sender !== username) {
-                if (!isTabActive()) {
-                    playNotificationSound();
-                    
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        new Notification('New Message from ' + sender, {
-                            body: image ? 'Sent an image' + (message ? ': ' + message : '') : message,
-                            icon: 'icon.png'
-                        });
-                    }
-                }
-            }
-        }
-
-        // Display system message in the chat
-        function displaySystemMessage(message, timestamp) {
-            const messageDiv = createSystemMessageElement(message, timestamp);
-            chatMessages.appendChild(messageDiv);
-            lastMessageSender = null; // Reset last sender after system message
-            
-            // Always scroll to bottom for system messages
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        // Update online users list
-        function updateOnlineUsers(users) {
-            onlineUsers.innerHTML = '';
-            
-            users.forEach(user => {
-                // Check if the user is a simple string (old format) or an object with DND status
-                const isObject = typeof user === 'object';
-                const username = isObject ? user.username : user;
-                const isDnd = isObject ? user.dnd : false;
-                
-                const userItem = document.createElement('div');
-                userItem.className = 'user-item';
-                
-                const userStatus = document.createElement('div');
-                userStatus.className = 'user-status';
-                // Set status color based on DND
-                userStatus.style.backgroundColor = isDnd ? '#ff6b6b' : '#4CAF50';
-                
-                const userName = document.createElement('span');
-                userName.textContent = username === window.username ? `${username} (You)` : username;
-                
-                // Apply username color from server's userColors
-                if (userColors[username]) {
-                    userName.style.color = userColors[username];
-                }
-                
-                userItem.appendChild(userStatus);
-                userItem.appendChild(userName);
-                
-                onlineUsers.appendChild(userItem);
-            });
-        }
-        
-        // Function to check if the tab is visible
-        function isTabActive() {
-            return !document.hidden;
-        }
-        
-        // Add this code right after your variable declarations, before any other setup
-        //  sound setup
-        // Correct the audio file paths
-        
-        const mp3Source = document.createElement('source');
-        mp3Source.src = 'public/sounds/notif.mp3'; // Ensure this path is correct
-        mp3Source.type = 'audio/mpeg';
-        const wavSource = document.createElement('source');
-        wavSource.src = 'public/sounds/notif.wav'; // Ensure this path is correct
-        wavSource.type = 'audio/wav';
-        notificationSound.appendChild(mp3Source);
-        notificationSound.appendChild(wavSource);
-
-        // Properly initialize the audio element and handle errors
-        notificationSound.addEventListener('canplaythrough', () => {
-            console.log('Notification sound loaded successfully');
-        });
-
-        notificationSound.addEventListener('error', function(e) {
-            console.warn('Notification sound could not be loaded', e);
-            console.warn('Audio element error code:', e.target.error.code); // Get the error code
-            console.warn('Audio element error message:', e.target.error.message); // Get the error message
-        });
-
-        // Add this after the existing variable declarations
-        let enableSounds = localStorage.getItem('enable_sounds') === 'true';
-
-        // Set up animal sound effects for typing
-        const animalSounds = {};
-        const availableLetters = 'abcdefghijklmnopqrstuvwxyz';
-
-        // Preload all animal sound effects
-        availableLetters.split('').forEach(letter => {
-            const sound = new Audio(`public/sounds/animal/${letter}.wav`);
-            sound.volume = 0.2; // Lower volume for typing sounds
-            animalSounds[letter] = sound;
-        });
-
-        // Add keydown event listener to the chat input to play animal sounds
-        chatInput.addEventListener('keydown', function(e) {
-            if (!enableSounds) return; // Check if sounds are enabled
-
-            // Only handle regular letter keys (not special keys like Shift, Enter, etc.)
-            const key = e.key.toLowerCase();
-            
-            // Check if it's a letter and we have a sound for it
-            if (availableLetters.includes(key) && animalSounds[key]) {
-                // Reset sound to beginning if it's already playing
-                animalSounds[key].currentTime = 0;
-                
-                // Play the animal sound corresponding to the letter
-                const playPromise = animalSounds[key].play();
-                
-                // Handle play failures silently (common in browsers requiring user interaction)
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        // Don't show errors for typing sounds as they're non-critical
-                        console.debug('Could not play animal sound for letter', key, error);
+                try {
+                    const response = await fetch('https://averrgy-github-io.onrender.com/upload', {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     });
+
+                    if (!response.ok) throw new Error(`Server ${response.status}: ${response.statusText}`);
+
+                    const ct = response.headers.get('content-type');
+                    if (!ct || !ct.includes('application/json')) throw new Error('Server did not return JSON');
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        let imagePath = result.filePath;
+                        if (imagePath && !imagePath.startsWith('http')) {
+                            imagePath = 'https://averrgy-github-io.onrender.com' +
+                                        (imagePath.startsWith('/') ? '' : '/') + imagePath;
+                        }
+                        socket.emit('chat_message', { message, image: imagePath, replyTo: currentReply });
+                    } else {
+                        alert('Upload failed: ' + (result.message || 'unknown error'));
+                    }
+                } catch (err) {
+                    alert('Upload error: ' + (err.message || err));
+                } finally {
+                    isUploading  = false;
+                    selectedImage = null;
+                    chatInput.placeholder = 'Type your message...';
+                    chatForm.removeChild(loader);
                 }
+
+            } else {
+                // ── Text-only path ──────────────────────────────────────
+                socket.emit('chat_message', { message, replyTo: currentReply });
             }
+
+            // Clear input and reply state
+            chatInput.value = '';
+            document.getElementById('image-upload').value = '';
+            chatInput.focus();
+            clearReply();
         });
+    }
 
-        chatInput.addEventListener('input', function(e) {
-            const cursorPosition = chatInput.selectionStart;
-            const textBeforeCursor = chatInput.value.slice(0, cursorPosition);
-            const textAfterCursor = chatInput.value.slice(cursorPosition);
+    // ── Create a message element ──────────────────────────────────────────
+    // replyTo shape: { username, message, color } | null
+    function createMessageElement(sender, message, timestamp,
+                                  isContinuation = false, color, image = null, replyTo = null) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message';
 
-            // Replace emojis in the text before the cursor
-            const newTextBeforeCursor = replaceEmojis(textBeforeCursor);
+        // ── Username area ────────────────────────────────────────────────
+        const usernameArea = document.createElement('div');
+        usernameArea.className = 'username-area';
 
-            // Update the chat input value
-            chatInput.value = newTextBeforeCursor + textAfterCursor;
+        if (!isContinuation) {
+            const senderEl = document.createElement('span');
+            senderEl.className = 'message-sender';
+            senderEl.setAttribute('data-sender', sender);
+            senderEl.textContent = sender;
+            if (color)              senderEl.style.color = color;
+            else if (userColors[sender]) senderEl.style.color = userColors[sender];
 
-            // Restore the cursor position
-            chatInput.selectionStart = chatInput.selectionEnd = newTextBeforeCursor.length;
-        });
+            const sep = document.createElement('span');
+            sep.className   = 'message-separator';
+            sep.textContent = ' ~ ';
 
-        // Replace the existing playNotificationSound function with this one
-        function playNotificationSound() {
-            console.log('playNotificationSound called, DND:', isDndEnabled);
-            if (!isDndEnabled) {
-                // Make sure the audio element exists
-                if (!notificationSound || !notificationSound.play) {
-                    console.warn('Notification sound element not properly initialized');
-                    return;
-                }
-
-                // Reset to beginning and set volume
-                notificationSound.currentTime = 0; // Change to 0 to start from the beginning
-                notificationSound.volume = 0.5;
-
-                // Play with proper error handling
-                const playPromise = notificationSound.play();
-
-                // Modern browsers return a promise from play()
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        console.warn('Could not play notification sound:', error);
-
-                        // Common issue: browsers require user interaction before playing audio
-                        console.log('Note: Browsers often require user interaction before playing audio');
-                    });
-                }
-            }
+            usernameArea.appendChild(senderEl);
+            usernameArea.appendChild(sep);
         }
 
+        messageDiv.appendChild(usernameArea);
 
-        
-        // Check if the browser supports notifications
-        if ('Notification' in window) {
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    console.log('Notification permission granted.');
-                }
+        // ── Message content ──────────────────────────────────────────────
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+
+        // ── Reply quote block ────────────────────────────────────────────
+        // If this message was a reply, show a small quote of the original above it.
+        if (replyTo) {
+            const quote = document.createElement('div');
+            quote.className = 'reply-quote';
+
+            const qAuthor = document.createElement('span');
+            qAuthor.className   = 'reply-quote-author';
+            qAuthor.textContent = replyTo.username;
+            if (replyTo.color) qAuthor.style.color = replyTo.color;
+            else if (userColors[replyTo.username]) qAuthor.style.color = userColors[replyTo.username];
+
+            const qSep  = document.createTextNode(': ');
+
+            const qText = document.createElement('span');
+            qText.className   = 'reply-quote-text';
+            // Truncate long quoted text so it doesn't dominate the layout
+            const raw = replyTo.message || '[image]';
+            qText.textContent = raw.length > 120 ? raw.substring(0, 120) + '…' : raw;
+
+            quote.appendChild(qAuthor);
+            quote.appendChild(qSep);
+            quote.appendChild(qText);
+            messageContent.appendChild(quote);
+        }
+
+        // Timestamp (only on first message of a group, and only for text messages)
+        if (!isContinuation && timestamp && !image) {
+            const ts = document.createElement('span');
+            ts.className   = 'timestamp';
+            ts.textContent = formatTimestamp(timestamp);
+            messageContent.appendChild(ts);
+        }
+
+        // Text
+        if (message && message.length > 0) {
+            messageContent.appendChild(document.createTextNode(message));
+        }
+
+        // Image
+        if (image) {
+            const img = document.createElement('img');
+            img.src       = image;
+            img.className = 'message-image';
+            img.alt       = 'Shared image';
+            img.onerror   = () => { img.alt = 'Image failed to load'; };
+            img.addEventListener('click', () => window.open(image, '_blank'));
+            if (message && message.length > 0) messageContent.appendChild(document.createElement('br'));
+            messageContent.appendChild(img);
+        }
+
+        // Apply message color
+        if (color)              messageContent.style.color = color;
+        else if (userColors[sender]) messageContent.style.color = userColors[sender];
+
+        messageDiv.appendChild(messageContent);
+
+        // ── Reply button (↩) — appears on hover via CSS ──────────────────
+        // We capture sender/message/color in a closure so the handler always
+        // has the right data regardless of when it fires.
+        const replyBtn = document.createElement('button');
+        replyBtn.className   = 'reply-btn';
+        replyBtn.textContent = '↩';
+        replyBtn.title       = 'Reply';
+        replyBtn.type        = 'button'; // prevent accidental form submission
+        replyBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            setReply({
+                username: sender,
+                message: message || '',
+                color: color || userColors[sender] || null
             });
-        }
-        
-        function sanitizeHTML(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        // Add event listener for visibility changes
-        document.addEventListener('visibilitychange', function() {
-            // You could add logic here if you want to respond to the tab becoming active again.
         });
-    
+        messageDiv.appendChild(replyBtn);
+
+        return messageDiv;
+    }
+
+    // ── Create a system message element ──────────────────────────────────
+    function createSystemMessageElement(message, timestamp) {
+        const div = document.createElement('div');
+        div.className   = 'system-message';
+        div.textContent = message;
+        if (timestamp) {
+            const ts = document.createElement('span');
+            ts.className   = 'timestamp';
+            ts.textContent = formatTimestamp(timestamp);
+            div.appendChild(ts);
+        }
+        return div;
+    }
+
+    // ── Display a new incoming message ────────────────────────────────────
+    function displayMessage(sender, message, timestamp, color, image = null, replyTo = null) {
+        // A reply always breaks a continuation run so the sender name is shown
+        const isContinuation = !replyTo && (sender === lastMessageSender);
+        const el = createMessageElement(sender, message, timestamp,
+                                        isContinuation, color, image, replyTo);
+        chatMessages.appendChild(el);
+        lastMessageSender = sender;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (sender !== username && !isTabActive()) {
+            playNotificationSound();
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('New Message from ' + sender, {
+                    body: image ? 'Sent an image' + (message ? ': ' + message : '') : message,
+                    icon: 'icon.png'
+                });
+            }
+        }
+    }
+
+    // ── Display a system message ──────────────────────────────────────────
+    function displaySystemMessage(message, timestamp) {
+        chatMessages.appendChild(createSystemMessageElement(message, timestamp));
+        lastMessageSender = null;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // ── Update online user list ────────────────────────────────────────────
+    function updateOnlineUsers(users) {
+        onlineUsers.innerHTML = '';
+        users.forEach(user => {
+            const isObj    = typeof user === 'object';
+            const uname    = isObj ? user.username : user;
+            const isDnd    = isObj ? user.dnd : false;
+
+            const item   = document.createElement('div');
+            item.className = 'user-item';
+
+            const dot = document.createElement('div');
+            dot.className = 'user-status';
+            dot.style.backgroundColor = isDnd ? '#ff6b6b' : '#4CAF50';
+
+            const label = document.createElement('span');
+            label.textContent = uname === window.username ? `${uname} (You)` : uname;
+            if (userColors[uname]) label.style.color = userColors[uname];
+
+            item.appendChild(dot);
+            item.appendChild(label);
+            onlineUsers.appendChild(item);
+        });
+    }
+
+    // ── Update colors on existing messages ────────────────────────────────
+    function updateDisplayedColors() {
+        document.querySelectorAll('.message').forEach(el => {
+            const sEl = el.querySelector('.message-sender');
+            if (!sEl) return;
+            const s = sEl.getAttribute('data-sender');
+            if (userColors[s]) {
+                sEl.style.color = userColors[s];
+                const c = el.querySelector('.message-content');
+                if (c) c.style.color = userColors[s];
+            }
+        });
+    }
+
+    function isTabActive() { return !document.hidden; }
+
+    // ── Notification sound ────────────────────────────────────────────────
+    const mp3Source = document.createElement('source');
+    mp3Source.src  = 'public/sounds/notif.mp3';
+    mp3Source.type = 'audio/mpeg';
+    const wavSource = document.createElement('source');
+    wavSource.src  = 'public/sounds/notif.wav';
+    wavSource.type = 'audio/wav';
+    notificationSound.appendChild(mp3Source);
+    notificationSound.appendChild(wavSource);
+
+    function playNotificationSound() {
+        if (isDndEnabled) return;
+        notificationSound.currentTime = 0;
+        notificationSound.volume      = 0.5;
+        const p = notificationSound.play();
+        if (p) p.catch(() => {});
+    }
+
+    // ── Animal typing sounds ───────────────────────────────────────────────
+    let enableSounds = localStorage.getItem('enable_sounds') === 'true';
+    const animalSounds = {};
+    'abcdefghijklmnopqrstuvwxyz'.split('').forEach(letter => {
+        const s = new Audio(`public/sounds/animal/${letter}.wav`);
+        s.volume = 0.2;
+        animalSounds[letter] = s;
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+        if (!enableSounds) return;
+        const key = e.key.toLowerCase();
+        if (animalSounds[key]) {
+            animalSounds[key].currentTime = 0;
+            animalSounds[key].play().catch(() => {});
+        }
+    });
+
+    // ── Live emoji replacement while typing ───────────────────────────────
+    chatInput.addEventListener('input', () => {
+        const pos = chatInput.selectionStart;
+        const before = chatInput.value.slice(0, pos);
+        const after  = chatInput.value.slice(pos);
+        const newBefore = replaceEmojis(before);
+        chatInput.value = newBefore + after;
+        chatInput.selectionStart = chatInput.selectionEnd = newBefore.length;
+    });
+
+    // ── Notification permission ───────────────────────────────────────────
+    if ('Notification' in window) {
+        Notification.requestPermission().then(p => {
+            if (p === 'granted') console.log('Notification permission granted.');
+        });
+    }
+
+    // ── showImagePreview (used by clipboard paste) ─────────────────────────
+    function showImagePreview(file) {
+        // Remove any existing preview
+        const old = document.getElementById('paste-preview');
+        if (old) old.remove();
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = document.createElement('img');
+            img.id        = 'paste-preview';
+            img.src       = e.target.result;
+            img.className = 'image-preview';
+            img.style.maxWidth  = '120px';
+            img.style.maxHeight = '80px';
+            img.style.margin    = '4px 8px 0';
+            // Insert the preview just before the chat form
+            chatForm.parentNode.insertBefore(img, chatForm);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    document.addEventListener('visibilitychange', () => {});
     </script>
 </body>
 </html>
