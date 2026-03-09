@@ -42,7 +42,7 @@
             </div>
 
             <div class="chat-messages" id="chat-messages">
-                <div class="loading-indicator" id="loading-indicator"></div>
+                <div class="loading-indicator" id="loading-indicator">Loading messages...</div>
             </div>
 
             <!-- Reply preview bar — hidden until a user clicks ↩ on a message -->
@@ -85,6 +85,11 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script>
+    // ── Backend URL ───────────────────────────────────────────────────────
+    // GitHub Pages serves the HTML statically; the Node/Socket.IO server
+    // lives on Render. Update this if your Render URL changes.
+    const SERVER_URL = 'https://real-time-chat.onrender.com';
+
     // ── State ──────────────────────────────────────────────────────────────
     let username       = '';
     let socket;
@@ -192,7 +197,7 @@
 
     // ── Chat initialisation ───────────────────────────────────────────────
     function initializeChat(selectedColor) {
-        socket = io(window.location.origin, {
+        socket = io(SERVER_URL, {
             query: { username, color: selectedColor },
             reconnection: true,
             reconnectionAttempts: 5,
@@ -437,7 +442,7 @@
                 formData.append('image', selectedImage);
 
                 try {
-                    const response = await fetch(window.location.origin + '/upload', {
+                    const response = await fetch(SERVER_URL + '/upload', {
                         method: 'POST',
                         body: formData,
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -453,7 +458,7 @@
                     if (result.success) {
                         let imagePath = result.filePath;
                         if (imagePath && !imagePath.startsWith('http')) {
-                            imagePath = window.location.origin +
+                            imagePath = SERVER_URL +
                                         (imagePath.startsWith('/') ? '' : '/') + imagePath;
                         }
                         socket.emit('chat_message', { message, image: imagePath, replyTo: currentReply });

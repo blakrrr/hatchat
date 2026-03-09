@@ -68,7 +68,10 @@ function compressVideo(filePath) {
 
 const app = express();
 app.use(cors());
+// Serve static assets from /public (sounds, uploads, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
+// Serve root-level HTML files (chat.html, clips.html, settings.html, index.html)
+app.use(express.static(path.join(__dirname)));
 
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -167,9 +170,9 @@ app.post('/upload-clip', (req, res) => {
     });
 });
 
-// GET /clips — returns a sorted list of all clip filenames
+// GET /api/clips — returns a sorted list of all clip filenames
 // Sorted alphabetically = sorted by date because NVIDIA names are date-prefixed
-app.get('/clips', (req, res) => {
+app.get('/api/clips', (req, res) => {
     try {
         const videoExts = /\.(mp4|webm|mov|avi)$/i;
         const files = fs.readdirSync(CLIPS_DIR)
@@ -265,6 +268,8 @@ io.on('connection', (socket) => {
             totalMessages: chatMessages.length,
             userColors
         });
+        // Tell the client to scroll to the bottom after the first page loads
+        if (page === 1) socket.emit('scroll_to_latest');
     });
 
     socket.on('update_color', (data) => {
@@ -294,8 +299,10 @@ io.on('connection', (socket) => {
 });
 
 // ─── STATIC PAGE ROUTES ───────────────────────────────────────────────────
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'chat.html')));
+app.get('/clips', (req, res) => res.sendFile(path.join(__dirname, 'clips.html')));
+app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'settings.html')));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

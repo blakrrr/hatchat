@@ -57,8 +57,9 @@
 
     <script>
         // ── Config ──────────────────────────────────────────────
-        // Use the current origin so this works on any domain — no hardcoded URL needed.
-        const SERVER = window.location.origin;
+        // GitHub Pages serves the HTML; the Node server lives on Render.
+        // Update this URL if your Render service name changes.
+        const SERVER = 'https://real-time-chat.onrender.com';
 
         // ── Elements ────────────────────────────────────────────
         const fileInput      = document.getElementById('clip-file-input');
@@ -197,7 +198,7 @@
             try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 7000); // 7s per attempt
-                const res  = await fetch(`${SERVER}/clips`, { signal: controller.signal });
+                const res  = await fetch(`${SERVER}/api/clips`, { signal: controller.signal });
                 clearTimeout(timer);
                 const text = await res.text();
 
