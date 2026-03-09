@@ -383,8 +383,7 @@
 
             if (isCont) {
                 el.classList.add('continued-message');
-                const ua = el.querySelector('.username-area');
-                if (ua) ua.innerHTML = '';
+                // CSS hides .username-area for .continued-message — no need to wipe innerHTML
             } else {
                 el.classList.remove('continued-message');
             }
@@ -530,10 +529,19 @@
         // the bracket takes on the quoted sender's color.
         if (replyTo) {
             const quoteColor = replyTo.color || userColors[replyTo.username] || '#666';
+
+            // Discord-style reply: a wrapper with a curved left-bar connecting
+            // the quote chip above to the reply text below.
+            const wrapper = document.createElement('div');
+            wrapper.className = 'reply-wrapper';
+            wrapper.style.setProperty('--reply-color', quoteColor);
+
             const quote = document.createElement('div');
             quote.className = 'reply-quote';
-            // CSS var makes the bracket color match the quoted sender
-            quote.style.setProperty('--reply-color', quoteColor);
+
+            const qIcon = document.createElement('span');
+            qIcon.className   = 'reply-quote-icon';
+            qIcon.textContent = '↩';
 
             const qAuthor = document.createElement('span');
             qAuthor.className   = 'reply-quote-author';
@@ -545,12 +553,39 @@
             const qText = document.createElement('span');
             qText.className   = 'reply-quote-text';
             const raw = replyTo.message || '[image]';
-            qText.textContent = raw.length > 100 ? raw.substring(0, 100) + '…' : raw;
+            qText.textContent = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
 
+            quote.appendChild(qIcon);
             quote.appendChild(qAuthor);
             quote.appendChild(qSep);
             quote.appendChild(qText);
-            messageContent.appendChild(quote);
+            wrapper.appendChild(quote);
+
+            // Reply text + image live inside the wrapper (not messageContent directly)
+            const replyBody = document.createElement('div');
+            replyBody.className = 'reply-body';
+            if (message && message.length > 0) {
+                replyBody.appendChild(document.createTextNode(message));
+            }
+            if (image) {
+                const img = document.createElement('img');
+                img.src       = image;
+                img.className = 'message-image';
+                img.alt       = 'Shared image';
+                img.onerror   = () => { img.alt = 'Image failed to load'; };
+                img.addEventListener('click', () => window.open(image, '_blank'));
+                if (message && message.length > 0) replyBody.appendChild(document.createElement('br'));
+                replyBody.appendChild(img);
+            }
+            if (color)                   replyBody.style.color = color;
+            else if (userColors[sender]) replyBody.style.color = userColors[sender];
+
+            wrapper.appendChild(replyBody);
+            messageContent.appendChild(wrapper);
+
+            messageDiv.appendChild(messageContent);
+            messageDiv.appendChild(replyBtn);
+            return messageDiv; // skip the normal text/image block below
         }
 
         // timestamps removed
@@ -632,7 +667,7 @@
     // ── Display a system message ──────────────────────────────────────────
     function displaySystemMessage(message, timestamp) {
         chatMessages.appendChild(createSystemMessageElement(message, timestamp));
-        lastMessageSender = null;
+        lastMessageSender = null; // always break continuation after system messages
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 

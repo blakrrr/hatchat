@@ -157,9 +157,16 @@
                         showStatus('Upload failed: ' + (result.message || 'unknown error'), 'error');
                     }
                 } catch {
-                    // Server is probably still waking up — the response was HTML not JSON.
-                    // Tell the user to wait a moment and try again.
-                    showStatus('Upload failed: server is waking up. Wait ~30s then try again.', 'error');
+                    // Server returned non-JSON — likely old server code without /upload-clip route.
+                    // Show the raw status code to help diagnose.
+                    const code = xhr.status;
+                    if (code === 404) {
+                        showStatus('Upload failed: server does not have the /upload-clip route yet. Redeploy Render.', 'error');
+                    } else if (code === 0 || code >= 500) {
+                        showStatus('Upload failed: server error or still waking up. Wait ~30s and try again.', 'error');
+                    } else {
+                        showStatus(`Upload failed: unexpected response (HTTP ${code}). Check Render logs.`, 'error');
+                    }
                 }
             });
 

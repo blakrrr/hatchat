@@ -121,38 +121,38 @@ nav a:hover {
 
 .message {
     position: relative;
-    margin-bottom: 0.15rem;
-    padding: 0.15rem 2rem 0.15rem 0;
+    margin-bottom: 0;
+    padding: 0.05rem 2.5rem 0.05rem 1rem;
     max-width: 100%;
     word-wrap: break-word;
-    display: flex;
-    align-items: baseline; /* username and first line of text sit on same baseline */
+    display: block;
 }
 
-.message-info {
-    font-size: 0.8rem;
-    color: #aaa;
-    display: inline-block;
-    vertical-align: top;
+/* First message in a run gets a small top gap to breathe */
+.message:not(.continued-message) {
+    margin-top: 0.6rem;
 }
 
 .username-area {
-    width: 11ch;
-    min-width: 11ch;
-    text-align: right;
+    display: block;
     font-size: 0.8rem;
     color: #aaa;
+    margin-bottom: 0.1rem;
 }
 
-.message-sender    { font-weight: bold; white-space: pre; }
-.message-separator { margin: 0; white-space: pre; }
+/* Hide the username area entirely for continuation messages */
+.continued-message .username-area {
+    display: none;
+}
+
+.message-sender    { font-weight: bold; }
+.message-separator { margin: 0; }
 
 .message-content {
-    display: block;       /* block so reply-quote div renders; flex item so it fills the row */
+    display: block;
     word-break: break-word;
     white-space: normal;
-    flex: 1;
-    padding-left: 0.5rem;
+    padding-left: 0;
     min-width: 0;
 }
 
@@ -172,8 +172,7 @@ nav a:hover {
     display: none;
     position: absolute;
     right: 6px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 4px;
     background: none;
     border: 1px solid #444;
     border-radius: 4px;
@@ -209,39 +208,74 @@ nav a:hover {
    The ::before draws the short vertical tail from the bracket corner
    down to the reply text, completing the bracket shape.
 ────────────────────────────────────────────────────────────── */
-.reply-quote {
-    display: block;
+/* Wrapper that holds both the quote chip and the reply message content */
+.reply-wrapper {
+    display: flex;
+    flex-direction: column;
     position: relative;
-    border-left: 2px solid var(--reply-color, #666);
-    border-top:  2px solid var(--reply-color, #666);
-    border-radius: 0 6px 0 0;    /* rounds the top-right corner = the ╭ curve */
-    padding: 4px 8px 4px 8px;
-    margin-bottom: 8px;
-    background-color: rgba(255, 255, 255, 0.03);
-    font-size: 0.82em;
+    padding-left: 14px;
+    margin-top: 2px;
+}
+
+/* Vertical bar on the left, running from quote chip down to message */
+.reply-wrapper::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 14px;
+    width: 2px;
+    background: var(--reply-color, #555);
+    border-radius: 1px;
+    opacity: 0.65;
+}
+
+/* Bottom-left curve hooking right into the reply text */
+.reply-wrapper::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 12px;
+    width: 12px;
+    height: 10px;
+    border-left: 2px solid var(--reply-color, #555);
+    border-bottom: 2px solid var(--reply-color, #555);
+    border-radius: 0 0 0 4px;
+    opacity: 0.65;
+}
+
+.reply-quote {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px 3px 4px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+    font-size: 0.78em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 600px;
     cursor: pointer;
     transition: background 0.12s;
+    margin-bottom: 4px;
+    max-width: 480px;
 }
 
-/* Vertical tail — extends the left border downward to connect to reply text */
-.reply-quote::after {
-    content: '';
-    position: absolute;
-    left: -2px;
-    top: 100%;
-    width: 2px;
-    height: 7px;
-    background: var(--reply-color, #666);
-    opacity: 0.6;
+.reply-quote:hover { background-color: rgba(255,255,255,0.09); }
+
+.reply-quote-icon {
+    color: var(--reply-color, #888);
+    font-size: 0.85em;
+    flex-shrink: 0;
+    opacity: 0.85;
 }
 
-.reply-quote:hover { background-color: rgba(255,255,255,0.07); }
-.reply-quote-author { font-weight: bold; }
-.reply-quote-text   { color: #bbb; }
+.reply-quote-author {
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.reply-quote-text { color: #999; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Reply Preview Bar (above the input) ─────────────────────── */
 .reply-preview {
