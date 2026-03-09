@@ -165,60 +165,59 @@
             xhr.addEventListener('error', () => {
                 progressWrap.style.display = 'none';
                 submitBtn.disabled = false;
-                showStatus('Upload failed: network error.', 'error');
+                showStatus('Network error — server may be waking up. Wait 30s and try again.', 'error');
+            });
+
+            xhr.addEventListener('timeout', () => {
+                progressWrap.style.display = 'none';
+                submitBtn.disabled = false;
+                showStatus('Upload timed out — file may be too large, or server is cold. Try again.', 'error');
             });
 
             xhr.open('POST', `${SERVER}/upload-clip`);
+            xhr.timeout = 5 * 60 * 1000; // 5 min timeout for large files
             xhr.send(formData);
         });
 
         // ── Load Clips ───────────────────────────────────────────
-        // Render free tier sleeps after 15 min of inactivity.
-        // When asleep, the first request gets an HTML wake-up page (not JSON)
-        // which crashes JSON.parse. We retry up to 5 times with a 6s gap,
-        // showing a "waking server up..." message so the user knows to wait.
+        // Render free tier sleeps after 15 min idle. Cold start takes 30-60s.
+        // Strategy: 10 retries × 8s = up to 80s total wait.
+        // We parse the response text manually so a non-JSON wake page causes
+        // a retry rather than a crash.
         async function loadClips(attempt = 1) {
-            const MAX = 5;
-            const RETRY_MS = 6000;
+            const MAX = 10;
+            const RETRY_MS = 8000;
 
-            // Show a helpful status while we wait
             if (attempt === 1) {
                 grid.innerHTML = '<div class="clips-empty">loading clips...</div>';
             } else {
-                grid.innerHTML = `<div class="clips-empty">waking server up... (attempt ${attempt}/${MAX})</div>`;
+                grid.innerHTML = `<div class="clips-empty">waking server up... (${attempt}/${MAX}) — this takes ~30s on first load</div>`;
             }
 
             try {
-                const res  = await fetch(`${SERVER}/clips`);
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 7000); // 7s per attempt
+                const res  = await fetch(`${SERVER}/clips`, { signal: controller.signal });
+                clearTimeout(timer);
                 const text = await res.text();
 
-                // If Render returns an HTML wake page, text won't parse as JSON.
-                // Detect that and retry.
                 let data;
-                try {
-                    data = JSON.parse(text);
-                } catch {
-                    throw new Error('Server returned non-JSON (probably still waking up)');
-                }
+                try { data = JSON.parse(text); }
+                catch { throw new Error('non-JSON response'); }
 
                 grid.innerHTML = '';
-
                 if (!data.clips || data.clips.length === 0) {
                     grid.innerHTML = '<div class="clips-empty">no clips yet — be the first to upload one</div>';
                     return;
                 }
-
-                data.clips.forEach(filename => {
-                    const card = buildClipCard(filename);
-                    grid.appendChild(card);
-                });
+                data.clips.forEach(filename => grid.appendChild(buildClipCard(filename)));
 
             } catch (err) {
                 console.warn(`Clips load attempt ${attempt} failed:`, err.message);
                 if (attempt < MAX) {
                     setTimeout(() => loadClips(attempt + 1), RETRY_MS);
                 } else {
-                    grid.innerHTML = '<div class="clips-empty">could not reach server — try refreshing in a minute</div>';
+                    grid.innerHTML = '<div class="clips-empty">server took too long to wake up — try refreshing the page</div>';
                 }
             }
         }
