@@ -349,18 +349,29 @@
     // (which hides the sender label) is only applied when the same person
     // sends multiple messages in a row, and NOT when there's a replyTo block.
     function recalcContinuations(elements) {
+        // Called after sorting historical message batches.
+        // For each run of messages from the same sender, the 2nd+ messages are
+        // "continuations": we clear their username area and remove the timestamp
+        // so only the first in a run shows who sent it.
         let prevSender = null;
         elements.forEach(el => {
             if (el.classList.contains('system-message')) { prevSender = null; return; }
             const sEl = el.querySelector('.message-sender');
-            // Never treat a reply as a continuation — the quote block needs the header
+            // Replies always break the continuation — we need the sender header visible
             const hasReply = el.querySelector('.reply-quote');
             if (!sEl) return;
             const sender = sEl.getAttribute('data-sender');
             if (prevSender === sender && !hasReply) {
                 el.classList.add('continued-message');
-                const info = el.querySelector('.message-info');
-                if (info) info.style.display = 'none';
+                // FIX: was looking for .message-info which does not exist.
+                // The correct element is .username-area — clear its HTML so the
+                // 11ch column stays but the name and tilde disappear.
+                const ua = el.querySelector('.username-area');
+                if (ua) ua.innerHTML = '';
+                // Also remove the timestamp span — it was only added because all
+                // historical messages are initially created with isContinuation=false.
+                const ts = el.querySelector('.timestamp');
+                if (ts) ts.remove();
             } else {
                 el.classList.remove('continued-message');
             }
