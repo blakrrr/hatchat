@@ -121,14 +121,12 @@ nav a:hover {
 
 .message {
     position: relative;
-    margin-bottom: 0.5rem;
-    padding: 0.3rem 2.5rem 0.3rem 0;
+    margin-bottom: 0.15rem;
+    padding: 0.15rem 2rem 0.15rem 0;
     max-width: 100%;
     word-wrap: break-word;
     display: flex;
-    /* removed white-space: nowrap — flex handles row layout, this was
-       jamming timestamps against message text and breaking block children */
-    align-items: flex-start;
+    align-items: baseline; /* username and first line of text sit on same baseline */
 }
 
 .message-info {
@@ -150,33 +148,17 @@ nav a:hover {
 .message-separator { margin: 0; white-space: pre; }
 
 .message-content {
-    /* was display:inline — block children (reply-quote div) were invisible inside it.
-       flex context makes flex items block-level anyway, so this change is safe. */
-    display: block;
+    display: block;       /* block so reply-quote div renders; flex item so it fills the row */
     word-break: break-word;
     white-space: normal;
     flex: 1;
     padding-left: 0.5rem;
-    min-width: 0; /* prevents flex item overflow */
+    min-width: 0;
 }
 
-.continued-message { margin-top: 0.2rem; padding-top: 0; }
+.continued-message { margin-top: 0.05rem; padding-top: 0; }
 
-/* Timestamp — hidden by default, fades in when you hover the message row.
-   Positioned absolutely so it never pushes message text around. */
-.timestamp {
-    position: absolute;
-    right: 34px; /* leave room for reply button */
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.68rem;
-    color: #555;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-.message:hover .timestamp { opacity: 1; }
+/* timestamps removed */
 
 .system-message {
     text-align: center;
