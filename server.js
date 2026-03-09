@@ -398,7 +398,7 @@ io.on('connection', (socket) => {
                 delete voiceMembers[snapSocketId];
                 io.emit('voice_user_left', { socketId: snapSocketId });
             }
-        }, 4000);
+        }, 5 * 60 * 1000); // 5 minutes
 
         // Update the user list immediately so their dot disappears right away
         io.emit('update_users', { users: Object.values(users) });
