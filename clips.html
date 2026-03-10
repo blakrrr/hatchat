@@ -325,42 +325,68 @@
         selectFiles([...e.dataTransfer.files]);
     });
 
-    submitBtn.addEventListener('click',()=>{
+    submitBtn.addEventListener('click', () => uploadQueue());
+
+    async function uploadQueue() {
         if (!selectedFiles.length) return;
-        if (!username) return showStatus('Open hatchat first to set your username.','error');
-        const formData = new FormData();
-        formData.append('uploader', username);
-        selectedFiles.forEach(f=>formData.append('clips',f));
-        const xhr = new XMLHttpRequest();
-        progressWrap.style.display='block'; submitBtn.disabled=true;
-        progressBar.style.width='0%'; progressLabel.textContent='uploading...';
-        xhr.upload.addEventListener('progress',e=>{
-            if(e.lengthComputable){
-                const pct=Math.round((e.loaded/e.total)*100);
-                progressBar.style.width=pct+'%';
-                progressLabel.textContent=`uploading... ${pct}%`;
-            }
+        if (!username) return showStatus('Open hatchat first to set your username.', 'error');
+
+        const files   = [...selectedFiles];
+        const total   = files.length;
+        let done      = 0;
+        let succeeded = 0;
+        const failed  = [];
+
+        submitBtn.disabled = true;
+        progressWrap.style.display = 'block';
+        progressBar.style.width = '0%';
+
+        for (const file of files) {
+            progressLabel.textContent = `uploading ${done + 1} / ${total}  —  ${file.name.slice(0,40)}`;
+
+            const ok = await uploadOne(file);
+            done++;
+            progressBar.style.width = Math.round((done / total) * 100) + '%';
+            if (ok) succeeded++;
+            else    failed.push(file.name);
+        }
+
+        progressWrap.style.display = 'none';
+        selectedFiles = [];
+        selectedName.textContent = 'no files selected';
+        fileInput.value = '';
+        submitBtn.disabled = true;
+
+        if (failed.length === 0) {
+            showStatus(`${succeeded} clip(s) uploaded!`, 'success');
+        } else {
+            showStatus(`${succeeded} uploaded, ${failed.length} failed: ${failed.slice(0,3).join(', ')}${failed.length>3?'…':''}`, 'error');
+        }
+        loadClips();
+    }
+
+    // Upload a single file — returns true on success, false on failure.
+    function uploadOne(file) {
+        return new Promise(resolve => {
+            const fd = new FormData();
+            fd.append('uploader', username);
+            fd.append('clip', file);             // field name is now 'clip' (singular)
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${SERVER}/upload-clip`);
+            xhr.timeout = 10 * 60 * 1000;        // 10 min per file
+
+            xhr.addEventListener('load', () => {
+                try {
+                    const r = JSON.parse(xhr.responseText);
+                    resolve(r.success === true);
+                } catch { resolve(false); }
+            });
+            xhr.addEventListener('error',   () => resolve(false));
+            xhr.addEventListener('timeout', () => resolve(false));
+            xhr.send(fd);
         });
-        xhr.addEventListener('load',()=>{
-            progressWrap.style.display='none';
-            selectedFiles=[];selectedName.textContent='no files selected';
-            fileInput.value='';submitBtn.disabled=true;
-            try {
-                const r=JSON.parse(xhr.responseText);
-                if(r.success){
-                    showStatus(`${r.uploaded.length} clip(s) uploaded!${r.errors?.length?' ('+r.errors.length+' failed)':''}`,r.errors?.length?'error':'success');
-                    loadClips();
-                } else showStatus('Upload failed: '+(r.message||'unknown'),'error');
-            } catch { showStatus(`Upload failed: HTTP ${xhr.status}`,'error'); }
-        });
-        xhr.addEventListener('error',()=>{
-            progressWrap.style.display='none';submitBtn.disabled=false;
-            showStatus('Network error — try again.','error');
-        });
-        xhr.open('POST',`${SERVER}/upload-clip`);
-        xhr.timeout = 60 * 60 * 1000; // 60 minutes for large batches
-        xhr.send(formData);
-    });
+    }
 
     async function loadClips(attempt=1) {
         const MAX=10,RETRY=8000;

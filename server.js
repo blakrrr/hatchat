@@ -18,6 +18,9 @@ cloudinary.config({
 
 const app = express();
 app.use(cors());
+// Remove Express body size limits for clip uploads (multer handles multipart directly)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 // Serve static assets from /public (sounds, uploads, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve root-level HTML files (chat.html, clips.html, settings.html, index.html)
@@ -86,71 +89,54 @@ const clipUploadMW = multer({
     limits: { files: 200 }
 });
 
-// POST /upload-clip — supports large batches (up to 200 files)
-// Files are streamed from disk (temp) to Cloudinary one at a time to avoid
-// blowing Render's 512MB RAM limit when doing 89+ file batch uploads.
+// POST /upload-clip — ONE file per request.
+// The client sends files one at a time so a single failure never kills the batch.
 app.post('/upload-clip', (req, res) => {
-    // Set a generous timeout for large batches — 30 minutes
-    req.setTimeout(30 * 60 * 1000);
-    res.setTimeout(30 * 60 * 1000);
+    req.setTimeout(10 * 60 * 1000); // 10 min per file
+    res.setTimeout(10 * 60 * 1000);
 
-    clipUploadMW.array('clips', 200)(req, res, async (err) => {
+    clipUploadMW.single('clip')(req, res, async (err) => {
         if (err) return res.status(400).json({ success: false, message: err.message });
-        const files = req.files;
-        if (!files || files.length === 0) return res.status(400).json({ success: false, message: 'No files uploaded' });
+        const file = req.file;
+        if (!file) return res.status(400).json({ success: false, message: 'No file received' });
+
+        const uploader = (req.body && req.body.uploader) ? req.body.uploader.trim() : 'unknown';
+        const baseName = file.originalname.replace(/\.[^.]+$/, '');
 
         try {
-            const uploader = (req.body && req.body.uploader) ? req.body.uploader.trim() : 'unknown';
-            const results  = [];
-            const errors   = [];
+            const uploadResult = await new Promise((resolve, reject) => {
+                const stream = cloudinary.uploader.upload_stream(
+                    {
+                        resource_type: 'video',
+                        folder: 'hatchat-clips',
+                        public_id: baseName,
+                        overwrite: false,
+                        transformation: [{
+                            start_offset: '-30',
+                            bit_rate:     '1m',
+                            quality:      'auto:low',
+                            fetch_format: 'mp4',
+                        }],
+                        tags:    [`uploader:${uploader}`],
+                        context: `uploader=${uploader}`,
+                    },
+                    (error, result) => error ? reject(error) : resolve(result)
+                );
+                stream.end(file.buffer);
+            });
 
-            for (const file of files) {
-                const baseName = file.originalname.replace(/\.[^.]+$/, '');
-                try {
-                    const uploadResult = await new Promise((resolve, reject) => {
-                        const stream = cloudinary.uploader.upload_stream(
-                            {
-                                resource_type: 'video',
-                                folder: 'hatchat-clips',
-                                public_id: baseName,
-                                overwrite: false,
-                                // Apply transformation at ingest time — the stored file
-                                // IS the trimmed+compressed version. No async, no separate URL.
-                                // start_offset: '-30' = keep only the last 30 seconds.
-                                // bit_rate: '1m' = ~7.5 MB/min → a 30s clip ≈ 3.75 MB max.
-                                transformation: [
-                                    {
-                                        start_offset: '-30',
-                                        bit_rate:     '1m',
-                                        quality:      'auto:low',
-                                        fetch_format: 'mp4',
-                                    }
-                                ],
-                                tags: [`uploader:${uploader}`],
-                                context: `uploader=${uploader}`,
-                            },
-                            (error, result) => error ? reject(error) : resolve(result)
-                        );
-                        stream.end(file.buffer);
-                    });
-                    results.push({
-                        filename: file.originalname,
-                        url: uploadResult.secure_url,
-                        public_id: uploadResult.public_id,
-                        uploader,
-                    });
-                    // Free the buffer immediately after upload to keep RAM low
-                    file.buffer = null;
-                } catch (e) {
-                    errors.push({ filename: file.originalname, message: e.message });
-                    file.buffer = null;
-                }
-            }
-
-            res.status(200).json({ success: true, uploaded: results, errors });
-        } catch (error) {
-            console.error('Cloudinary upload error:', error);
-            res.status(500).json({ success: false, message: 'Upload to cloud failed: ' + error.message });
+            file.buffer = null; // free RAM immediately
+            res.json({
+                success:   true,
+                filename:  file.originalname,
+                url:       uploadResult.secure_url,
+                public_id: uploadResult.public_id,
+                uploader,
+            });
+        } catch (e) {
+            file.buffer = null;
+            console.error('Cloudinary upload error:', e.message);
+            res.status(500).json({ success: false, filename: file.originalname, message: e.message });
         }
     });
 });
