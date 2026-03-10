@@ -7,7 +7,7 @@ const path = require('path');
 const multer = require('multer');
 const fsExtra = require('fs-extra');
 const { v2: cloudinary } = require('cloudinary');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 // ─── Cloudinary config (set these in Render Environment Variables) ─────────
