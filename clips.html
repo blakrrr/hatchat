@@ -9,254 +9,192 @@
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
+</head>
 <body class="clips-page">
 
 <header>
-<div class="logo">hatchat - 1.0.0.7</div>
-<nav>
-<ul>
-<li><a href="clips.html">clips</a></li>
-<li><a href="index.html">homepage</a></li>
-<li><a href="chat.html">hatchat</a></li>
-<li><a href="settings.html">settings</a></li>
-<li><a href="download.html">download</a></li>
-</ul>
-</nav>
+  <div class="logo">hatchat - 1.0.0.7</div>
+  <nav>
+    <ul>
+      <li><a href="clips.html">clips</a></li>
+      <li><a href="index.html">homepage</a></li>
+      <li><a href="chat.html">hatchat</a></li>
+      <li><a href="settings.html">settings</a></li>
+      <li><a href="download.html">download</a></li>
+    </ul>
+  </nav>
 </header>
 
 <div class="clips-main">
-<div id="clips-status" class="clips-status-msg"></div>
+  <div id="clips-status" class="clips-status-msg"></div>
 
-<div class="clips-theater" id="clips-theater" style="display:none">
-<video class="theater-video" id="theater-video" preload="metadata"></video>
-<div class="theater-controls">
-<button class="tc-btn" id="tc-prev">⏮</button>
-<button class="tc-btn" id="tc-play">▶</button>
-<button class="tc-btn" id="tc-next">⏭</button>
-<input type="range" class="tc-seek" id="tc-seek" min="0" max="100" value="0">
-<span class="tc-time" id="tc-time">0:00 / 0:00</span>
-<button class="tc-btn" id="tc-mute">🔊</button>
-<input type="range" class="tc-vol" id="tc-vol" min="0" max="1" step="0.05" value="1">
-<button class="tc-btn" id="tc-full">⛶</button>
-<span class="tc-title" id="tc-title"></span>
-</div>
-</div>
+  <!-- Theater Mode -->
+  <div class="clips-theater" id="clips-theater" style="display:none">
+    <video class="theater-video" id="theater-video" preload="metadata"></video>
+    <div class="theater-controls">
+      <div class="tc-trim-wrap" title="Preview start offset from end">
+        <span class="tc-trim-label">trim</span>
+        <input type="range" class="tc-trim" id="tc-trim" min="0" max="5" step="1" value="5">
+        <span class="tc-trim-val" id="tc-trim-val">60s</span>
+      </div>
+      <button class="tc-btn" id="tc-prev">⏮</button>
+      <button class="tc-btn" id="tc-play">▶</button>
+      <button class="tc-btn" id="tc-next">⏭</button>
+      <input type="range" class="tc-seek" id="tc-seek" min="0" max="100" step="0.1" value="0">
+      <span class="tc-time" id="tc-time">0:00 / 0:00</span>
+      <button class="tc-btn" id="tc-loop">🔁</button>
+      <button class="tc-btn" id="tc-shuffle">🔀</button>
+      <button class="tc-btn" id="tc-mute">🔊</button>
+      <input type="range" class="tc-vol" id="tc-vol" min="0" max="1" step="0.05" value="1">
+      <button class="tc-btn" id="tc-full">⛶</button>
+      <span class="tc-title" id="tc-title"></span>
+    </div>
+  </div>
 
-<div class="clips-upload-section" id="drop-zone">
-<h2>upload a clip</h2>
-<p>nvidia clips only · mp4 · webm · mov</p>
-<label class="clip-upload-label" for="clip-file-input">choose files</label>
-<input type="file" id="clip-file-input" class="clip-file-input"
-accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
-<button class="clip-submit-btn" id="clip-submit-btn" disabled>upload</button>
-<span class="clip-selected-name" id="clip-selected-name">no files selected</span>
+  <!-- Upload -->
+  <div class="clips-upload-section" id="drop-zone">
+    <h2>upload a clip</h2>
+    <p>nvidia clips only · mp4 · webm · mov · no size limit · last 60s kept · drag & drop or browse</p>
+    <label class="clip-upload-label" for="clip-file-input">choose files</label>
+    <input type="file" id="clip-file-input" class="clip-file-input" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
+    <button class="clip-submit-btn" id="clip-submit-btn" disabled>upload</button>
+    <span class="clip-selected-name" id="clip-selected-name">no files selected</span>
+    <div class="clip-upload-progress" id="clip-upload-progress">
+      <span id="clip-progress-label">uploading...</span>
+      <div class="clip-progress-bar-wrap">
+        <div class="clip-progress-bar" id="clip-progress-bar"></div>
+      </div>
+    </div>
+  </div>
 
-<div class="clip-upload-progress" id="clip-upload-progress">
-<span id="clip-progress-label">uploading...</span>
-<div class="clip-progress-bar-wrap">
-<div class="clip-progress-bar" id="clip-progress-bar"></div>
-</div>
-</div>
-</div>
+  <!-- Tabs -->
+  <div class="clips-tab-bar">
+    <button class="clips-tab active" id="tab-all" onclick="switchTab('all')">all clips</button>
+    <div class="clips-tab-users" id="tab-users"></div>
+  </div>
 
-<div class="clips-grid-section">
-<div id="clips-grid-all">
-<div class="clips-empty">loading clips...</div>
-</div>
-</div>
+  <!-- Grid -->
+  <div class="clips-grid-section">
+    <div id="clips-all-view"><div id="clips-grid-all"><div class="clips-empty">loading clips...</div></div></div>
+    <div id="clips-user-view" style="display:none"><div id="clips-grid-user"></div></div>
+  </div>
 </div>
 
 <script>
+const SERVER = window.location.protocol === 'file:' ? 'https://hatchat.blakrr.works' : window.location.origin;
+const username = localStorage.getItem('chat_username') || null;
+let allClipsData = [], playlist = [], playIdx = 0;
+let activeTab = 'all', trimSecs = 60;
 
-const SERVER = window.location.origin
-const username = localStorage.getItem("chat_username")
+// ── Helper: color palette
+const USER_PALETTE = ['#7c6af7','#e8724a','#4ab8e8','#6fcf6f','#e8d44a','#e84a8f','#4ae8b8','#e8a44a'];
+const userColorMap = {};
+let paletteIdx = 0;
+function getUserColor(user){ if(!user||user==='unknown') return '#666'; if(!userColorMap[user]) userColorMap[user]=USER_PALETTE[paletteIdx++ % USER_PALETTE.length]; return userColorMap[user]; }
 
-let allClipsData=[]
-let playlist=[]
-let playIdx=0
+// ── Clip grid builder
+function renderGrid(container, clips, showUploader){
+  container.innerHTML='';
+  if(!clips.length){ container.innerHTML='<div class="clips-empty">no clips</div>'; return; }
 
-const grid=document.getElementById("clips-grid-all")
-const tvid=document.getElementById("theater-video")
-const theater=document.getElementById("clips-theater")
+  clips.forEach(clip=>{
+    const card = document.createElement('div');
+    card.className='clip-card';
+    card.style.borderColor=getUserColor(clip.uploader)+'44';
 
-function fmt(s){
-s=Math.floor(s||0)
-return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
+    const thumb = document.createElement('div');
+    thumb.className='clip-thumb';
+
+    const video = document.createElement('video');
+    video.dataset.src = clip.url;
+    video.preload='none';
+    video.muted = true;
+    video.style.cssText='width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;';
+    thumb.appendChild(video);
+
+    const overlay = document.createElement('div');
+    overlay.className='clip-play-overlay'; overlay.innerHTML='▶';
+    overlay.addEventListener('click', e=>{ e.stopPropagation(); loadTheaterClipByUrl(clip.url); });
+    thumb.appendChild(overlay);
+
+    card.appendChild(thumb);
+
+    const info = document.createElement('div'); info.className='clip-card-info';
+    const nameEl = document.createElement('p'); nameEl.className='clip-card-name'; nameEl.textContent=clip.filename.replace(/\.[^.]+$/,'');
+    info.appendChild(nameEl);
+    if(showUploader && clip.uploader){
+      const uEl = document.createElement('p'); uEl.className='clip-card-uploader'; uEl.textContent=clip.uploader;
+      uEl.style.color = getUserColor(clip.uploader);
+      info.appendChild(uEl);
+    }
+    card.appendChild(info);
+    container.appendChild(card);
+  });
+
+  lazyLoadVideos();
 }
 
-function loadTheaterClip(idx){
-if(!playlist.length)return
-
-playIdx=((idx%playlist.length)+playlist.length)%playlist.length
-const clip=playlist[playIdx]
-
-tvid.src=clip.url
-tvid.play().catch(()=>{})
-
-document.getElementById("tc-title").textContent=clip.filename
-theater.style.display=""
-}
-
-document.getElementById("tc-play").onclick=()=>{
-if(tvid.paused)tvid.play()
-else tvid.pause()
-}
-
-document.getElementById("tc-prev").onclick=()=>loadTheaterClip(playIdx-1)
-document.getElementById("tc-next").onclick=()=>loadTheaterClip(playIdx+1)
-
-document.getElementById("tc-vol").oninput=e=>{
-tvid.volume=e.target.value
-}
-
-document.getElementById("tc-mute").onclick=()=>{
-tvid.muted=!tvid.muted
-}
-
-document.getElementById("tc-full").onclick=()=>{
-if(tvid.requestFullscreen)tvid.requestFullscreen()
-}
-
-tvid.addEventListener("timeupdate",()=>{
-const seek=document.getElementById("tc-seek")
-const time=document.getElementById("tc-time")
-
-if(!tvid.duration)return
-seek.value=(tvid.currentTime/tvid.duration)*100
-time.textContent=`${fmt(tvid.currentTime)} / ${fmt(tvid.duration)}`
-})
-
-document.getElementById("tc-seek").oninput=e=>{
-if(tvid.duration)
-tvid.currentTime=(e.target.value/100)*tvid.duration
-}
-
-tvid.onclick=()=>{
-if(tvid.paused)tvid.play()
-else tvid.pause()
-}
-
-function buildClipCard(clip){
-
-const filename=clip.filename
-const url=clip.url||`${SERVER}/uploads/clips/${encodeURIComponent(filename)}`
-
-const card=document.createElement("div")
-card.className="clip-card"
-
-const thumb=document.createElement("div")
-thumb.className="clip-thumb"
-
-const video=document.createElement("video")
-
-video.dataset.src=url
-video.preload="none"
-video.muted=true
-video.playsInline=true
-video.style="width:100%;height:100%;object-fit:cover"
-
-thumb.appendChild(video)
-
-const play=document.createElement("div")
-play.className="clip-play-overlay"
-play.innerHTML="▶"
-
-play.onclick=(e)=>{
-e.stopPropagation()
-const idx=playlist.findIndex(c=>c.filename===clip.filename)
-loadTheaterClip(idx)
-}
-
-thumb.appendChild(play)
-card.appendChild(thumb)
-
-const info=document.createElement("div")
-info.className="clip-card-info"
-
-const name=document.createElement("p")
-name.className="clip-card-name"
-name.textContent=filename.replace(/\.[^.]+$/,"")
-
-info.appendChild(name)
-
-if(clip.uploader){
-const up=document.createElement("p")
-up.className="clip-card-uploader"
-up.textContent=clip.uploader
-info.appendChild(up)
-}
-
-card.appendChild(info)
-
-return card
-}
-
-function renderGrid(clips){
-
-grid.innerHTML=""
-
-if(!clips.length){
-grid.innerHTML='<div class="clips-empty">no clips yet</div>'
-return
-}
-
-clips.forEach(c=>{
-grid.appendChild(buildClipCard(c))
-})
-
-playlist=[...clips]
-
-lazyLoadVideos()
-}
-
+// ── Lazy load videos
 function lazyLoadVideos(){
-
-const observer=new IntersectionObserver(entries=>{
-entries.forEach(entry=>{
-
-if(entry.isIntersecting){
-
-const v=entry.target
-
-if(!v.src){
-v.src=v.dataset.src
+  const observer = new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){
+        const v = entry.target;
+        if(!v.src) v.src = v.dataset.src;
+        observer.unobserve(v);
+      }
+    });
+  }, { rootMargin:'300px' });
+  document.querySelectorAll('video[data-src]').forEach(v=>observer.observe(v));
 }
 
-observer.unobserve(v)
-
+// ── Theater player
+const tvid = document.getElementById('theater-video');
+function loadTheaterClipByUrl(url){
+  tvid.src = url;
+  tvid.load();
+  tvid.play().catch(()=>{});
+  document.getElementById('clips-theater').style.display='';
 }
 
-})
-},{rootMargin:"300px"})
-
-document.querySelectorAll("video[data-src]").forEach(v=>{
-observer.observe(v)
-})
-}
-
+// ── Load clips
 async function loadClips(){
+  const grid = document.getElementById('clips-grid-all');
+  grid.innerHTML='<div class="clips-empty">loading clips...</div>';
+  try{
+    const res = await fetch(`${SERVER}/api/clips`);
+    const data = await res.json();
+    allClipsData = data.clips || [];
+    renderGrid(grid, allClipsData, true);
 
-try{
-
-grid.innerHTML='<div class="clips-empty">loading clips...</div>'
-
-const res=await fetch(`${SERVER}/api/clips`)
-const data=await res.json()
-
-allClipsData=data.clips||[]
-
-renderGrid(allClipsData)
-
-}catch(e){
-
-grid.innerHTML='<div class="clips-empty">failed to load clips</div>'
-
+    const uploaders = [...new Set(allClipsData.map(c=>c.uploader||'unknown'))];
+    buildTabBar(uploaders);
+  }catch(e){
+    console.error(e); grid.innerHTML='<div class="clips-empty">server error</div>';
+  }
 }
 
+// ── Tab bar
+function buildTabBar(uploaders){
+  const tabUsers = document.getElementById('tab-users');
+  tabUsers.innerHTML='';
+  uploaders.sort().forEach(user=>{
+    const btn = document.createElement('button');
+    btn.className='clips-tab'; btn.dataset.user=user; btn.textContent=user; btn.style.color=getUserColor(user);
+    btn.onclick = ()=>switchTab(user);
+    tabUsers.appendChild(btn);
+  });
 }
 
-loadClips()
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.clips-tab').forEach(b=>b.classList.remove('active'));
+  if(tab==='all'){ document.getElementById('tab-all').classList.add('active'); renderGrid(document.getElementById('clips-grid-all'), allClipsData, true); }
+  else { document.querySelector(`.clips-tab[data-user="${tab}"]`)?.classList.add('active');
+    renderGrid(document.getElementById('clips-grid-user'), allClipsData.filter(c=>c.uploader===tab), false); }
+}
 
+loadClips();
 </script>
 </body>
 </html>
