@@ -7,6 +7,9 @@ const path = require('path');
 const multer = require('multer');
 const fsExtra = require('fs-extra');
 const { v2: cloudinary } = require('cloudinary');
+const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 // ─── Cloudinary config (set these in Render Environment Variables) ─────────
 // CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
@@ -262,13 +265,123 @@ app.get('/api/clips', async (req, res) => {
 const onlineUsers = new Set();
 const userColors = {};
 let users = {};
-const voiceMembers = {};  // socketId -> { username }
+const voiceMembers = {};
 
-// Grace-period disconnect map: username -> setTimeout handle
-// When a user disconnects we don't immediately announce "X has left".
-// If they reconnect within 4 seconds (page navigation) we cancel the timer
-// and suppress both the leave AND join system messages silently.
 const disconnectTimers = {};
+
+// ─── ACCOUNTS ─────────────────────────────────────────────────────────────
+// users.json: { username: { email, passwordHash, color, verified, verifyCode, verifyExpires, sessionTokens: [] } }
+const USERS_FILE = path.join(__dirname, 'users.json');
+let registeredUsers = {};
+try {
+    if (fs.existsSync(USERS_FILE)) {
+        registeredUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } else {
+        fs.writeFileSync(USERS_FILE, '{}', 'utf8');
+    }
+} catch (e) { console.error('Error loading users:', e); }
+
+function saveRegisteredUsers() {
+    try { fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2), 'utf8'); }
+    catch (e) { console.error('Error saving users:', e); }
+}
+
+// Nodemailer — set EMAIL_USER and EMAIL_PASS in Render env vars (Gmail app password)
+const mailer = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+});
+
+async function sendVerifyEmail(to, code) {
+    if (!process.env.EMAIL_USER) return; // skip if not configured
+    await mailer.sendMail({
+        from: `"hatchat" <${process.env.EMAIL_USER}>`,
+        to,
+        subject: 'hatchat — verify your account',
+        text: `Your verification code is: ${code}\n\nExpires in 15 minutes.`,
+        html: `<p style="font-family:monospace;font-size:1.1em">your verification code:<br><br><strong style="font-size:1.5em;letter-spacing:.2em">${code}</strong><br><br><small>expires in 15 minutes</small></p>`,
+    });
+}
+
+// POST /api/register
+app.post('/api/register', async (req, res) => {
+    const { email, username, password, color } = req.body || {};
+    if (!email || !username || !password) return res.status(400).json({ success: false, message: 'Missing fields' });
+    if (username.length > 8) return res.status(400).json({ success: false, message: 'Username max 8 chars' });
+    if (registeredUsers[username.toLowerCase()]) return res.status(409).json({ success: false, message: 'Username taken' });
+    const emailTaken = Object.values(registeredUsers).some(u => u.email === email.toLowerCase());
+    if (emailTaken) return res.status(409).json({ success: false, message: 'Email already registered' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const verifyCode   = String(Math.floor(100000 + Math.random() * 900000));
+    const verifyExpires = Date.now() + 15 * 60 * 1000;
+
+    registeredUsers[username.toLowerCase()] = {
+        username, email: email.toLowerCase(), passwordHash,
+        color: color || '#FFFFFF', verified: false,
+        verifyCode, verifyExpires, sessionTokens: [],
+    };
+    saveRegisteredUsers();
+
+    try { await sendVerifyEmail(email, verifyCode); }
+    catch (e) { console.error('Email error:', e.message); }
+
+    res.json({ success: true, message: 'Registered — check your email for the verification code' });
+});
+
+// POST /api/verify-email
+app.post('/api/verify-email', (req, res) => {
+    const { username, code } = req.body || {};
+    const user = registeredUsers[username?.toLowerCase()];
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.verified) return res.json({ success: true, message: 'Already verified' });
+    if (user.verifyCode !== code) return res.status(400).json({ success: false, message: 'Wrong code' });
+    if (Date.now() > user.verifyExpires) return res.status(400).json({ success: false, message: 'Code expired' });
+
+    user.verified = true;
+    user.verifyCode = null;
+    user.verifyExpires = null;
+    saveRegisteredUsers();
+    res.json({ success: true });
+});
+
+// POST /api/login
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body || {};
+    const user = registeredUsers[username?.toLowerCase()];
+    if (!user) return res.status(401).json({ success: false, message: 'Wrong username or password' });
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) return res.status(401).json({ success: false, message: 'Wrong username or password' });
+    if (!user.verified) return res.status(403).json({ success: false, message: 'Email not verified yet', needsVerify: true });
+
+    // Issue a session token
+    const token = crypto.randomBytes(32).toString('hex');
+    user.sessionTokens = (user.sessionTokens || []).slice(-4); // keep last 5
+    user.sessionTokens.push(token);
+    saveRegisteredUsers();
+
+    res.json({ success: true, token, username: user.username, color: user.color });
+});
+
+// GET /api/me?token=xxx — validate a stored session token
+app.get('/api/me', (req, res) => {
+    const { token } = req.query;
+    if (!token) return res.status(401).json({ success: false });
+    const user = Object.values(registeredUsers).find(u => u.sessionTokens?.includes(token));
+    if (!user) return res.status(401).json({ success: false });
+    res.json({ success: true, username: user.username, color: user.color });
+});
+
+// GET /api/all-users — all registered users + online status (for the user panel)
+app.get('/api/all-users', (req, res) => {
+    const onlineUsernames = new Set(Object.values(users).map(u => u.username.toLowerCase()));
+    const list = Object.values(registeredUsers).map(u => ({
+        username: u.username,
+        color:    u.color,
+        online:   onlineUsernames.has(u.username.toLowerCase()),
+    }));
+    res.json({ success: true, users: list });
+});
 
 const MESSAGES_FILE = path.join(__dirname, 'chat_messages.json');
 const USER_COLORS_FILE = path.join(__dirname, 'user_colors.json');
@@ -328,6 +441,7 @@ io.on('connection', (socket) => {
             chatMessages.push({ type: 'system', message: `${data.username} has joined the chat`, timestamp: new Date().toISOString() });
             saveMessages();
         }
+        io.emit('refresh_all_users');
     });
 
     socket.on('chat_message', (data) => {
@@ -401,27 +515,24 @@ io.on('connection', (socket) => {
         onlineUsers.delete(username);
         delete users[socket.id];
         console.log(`User disconnected: ${username}`);
-
-        // Snapshot the socket id so the timer closure uses the right value
         const snapSocketId = socket.id;
 
-        // Wait 4 seconds before announcing "has left". If the user reconnects
-        // before the timer fires (e.g. they clicked a nav link), user_join will
-        // cancel this timer and no messages are shown.
         disconnectTimers[username] = setTimeout(() => {
             delete disconnectTimers[username];
             chatMessages.push({ type: 'system', message: `${username} has left the chat`, timestamp: new Date().toISOString() });
             saveMessages();
             io.emit('user_leave', { username, users: Object.values(users), userColors });
             io.emit('update_users', { users: Object.values(users) });
+            // Notify all clients to refresh their all-users panel
+            io.emit('refresh_all_users');
             if (voiceMembers[snapSocketId]) {
                 delete voiceMembers[snapSocketId];
                 io.emit('voice_user_left', { socketId: snapSocketId });
             }
-        }, 5 * 60 * 1000); // 5 minutes
+        }, 5 * 60 * 1000);
 
-        // Update the user list immediately so their dot disappears right away
         io.emit('update_users', { users: Object.values(users) });
+        io.emit('refresh_all_users');
     });
 });
 

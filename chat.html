@@ -7,15 +7,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d0d0d">
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
-        });
-      }
-    </script>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d0d0d">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
@@ -87,61 +78,104 @@
         </div>
     </div>
 
-    <!-- Username Modal -->
-    <div class="modal" id="username-modal">
-        <div class="modal-content">
-            <h2>Enter Your Username</h2>
-            <form id="username-form">
+    <!-- Auth Modal -->
+    <div class="modal" id="auth-modal">
+        <div class="modal-content" style="max-width:360px;width:90%">
+
+            <!-- LOGIN -->
+            <div id="auth-login">
+                <h2>hatchat</h2>
                 <div class="form-group">
-                    <label for="username-input">Username:</label>
-                    <input type="text" class="form-input" id="username-input" placeholder="Your username" required>
+                    <label>Username</label>
+                    <input class="form-input" id="login-username" placeholder="your username" maxlength="8">
                 </div>
                 <div class="form-group">
-                    <label for="color-input">Message Color:</label>
-                    <input type="color" class="form-input" id="color-input" value="#FFFFFF">
+                    <label>Password</label>
+                    <input class="form-input" id="login-password" type="password" placeholder="password">
                 </div>
-                <button type="submit" class="form-button">Join Chat</button>
-            </form>
+                <p id="login-error" style="color:#cf6f6f;font-size:.8rem;min-height:1.2em;margin:.25rem 0"></p>
+                <button class="form-button" id="login-btn">log in</button>
+                <p style="margin-top:.75rem;font-size:.8rem;color:#666;text-align:center">
+                    no account? <a href="#" id="go-register" style="color:#7c6af7">register</a>
+                </p>
+            </div>
+
+            <!-- REGISTER -->
+            <div id="auth-register" style="display:none">
+                <h2>create account</h2>
+                <div class="form-group">
+                    <label>Username <small style="color:#555">(max 8 chars)</small></label>
+                    <input class="form-input" id="reg-username" placeholder="username" maxlength="8">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input class="form-input" id="reg-email" type="email" placeholder="you@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input class="form-input" id="reg-password" type="password" placeholder="password">
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:.75rem">
+                    <label style="margin:0">Message Color</label>
+                    <input type="color" id="reg-color" value="#FFFFFF" style="width:2.5rem;height:2rem;border:none;background:none;cursor:pointer">
+                </div>
+                <p id="reg-error" style="color:#cf6f6f;font-size:.8rem;min-height:1.2em;margin:.25rem 0"></p>
+                <button class="form-button" id="reg-btn">create account</button>
+                <p style="margin-top:.75rem;font-size:.8rem;color:#666;text-align:center">
+                    have an account? <a href="#" id="go-login" style="color:#7c6af7">log in</a>
+                </p>
+            </div>
+
+            <!-- VERIFY EMAIL -->
+            <div id="auth-verify" style="display:none">
+                <h2>verify email</h2>
+                <p style="font-size:.85rem;color:#888;margin-bottom:1rem">check your inbox for a 6-digit code</p>
+                <div class="form-group">
+                    <label>Code</label>
+                    <input class="form-input" id="verify-code" placeholder="123456" maxlength="6"
+                           style="letter-spacing:.3em;font-size:1.2rem">
+                </div>
+                <p id="verify-error" style="color:#cf6f6f;font-size:.8rem;min-height:1.2em;margin:.25rem 0"></p>
+                <button class="form-button" id="verify-btn">verify</button>
+            </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script>
-    if (location.protocol === 'http:' && location.hostname !== 'localhost') {
-        location.replace('https:' + location.href.substring(5));
-    }
+    // ── Constants ────────────────────────────────────────────────────────
+    const SERVER = window.location.origin;
 
-    const SERVER_URL = 'https://averrgy-github-io.onrender.com';
-
-    let username = '', socket;
-    let currentPage = 1, isLoading = false, lastMessageSender = null;
+    // ── State ────────────────────────────────────────────────────────────
+    let username = '', userColor = '#FFFFFF', socket;
+    let currentPage = 1, isLoading = false;
     let selectedImage = null, isUploading = false, isDndEnabled = false;
     let userColors = {}, replyingTo = null;
 
-    const chatMessages     = document.getElementById('chat-messages');
+    // ── DOM refs ─────────────────────────────────────────────────────────
+    const chatMessagesEl   = document.getElementById('chat-messages');
     const chatForm         = document.getElementById('chat-form');
     const chatInput        = document.getElementById('chat-input');
-    const onlineUsers      = document.getElementById('online-users');
-    const usernameModal    = document.getElementById('username-modal');
-    const usernameForm     = document.getElementById('username-form');
-    const usernameInput    = document.getElementById('username-input');
+    const onlineUsersEl    = document.getElementById('online-users');
     const connectionStatus = document.getElementById('connection-status');
     const loadMoreBtn      = document.getElementById('load-more-btn');
     const loadingIndicator = document.getElementById('loading-indicator');
-    const colorInput       = document.getElementById('color-input');
     const dndToggle        = document.getElementById('dnd-toggle');
     const replyPreview     = document.getElementById('reply-preview');
     const replyPreviewText = document.getElementById('reply-preview-text');
     const replyCancelBtn   = document.getElementById('reply-cancel-btn');
-    const notificationSound = new Audio();
+    const authModal        = document.getElementById('auth-modal');
+    const notificationSound = new Audio('/public/sounds/notif.mp3');
 
+    // ── Emoji shortcuts ──────────────────────────────────────────────────
     const emojiMap = {
         ':smile:':'🙂',':heart:':'❤️',':tongue:':'👅',':green_square:':'🟩',
         ':anatomical_heart:':'🫀 (ANATOMICAL HEART!!!)',':locomotive:':'🚂',
         ':train:':'🚂',':horse:':'🐎',':fish:':'🐟',':nerd:':'🤓'
     };
-    function replaceEmojis(text) { return text.replace(/:\w+:/g, m => emojiMap[m] || m); }
+    function replaceEmojis(t) { return t.replace(/:\w+:/g, m => emojiMap[m] || m); }
 
+    // ── Reply helpers ────────────────────────────────────────────────────
     function setReply(data) {
         replyingTo = data;
         const preview = data.message
@@ -158,118 +192,202 @@
     }
     replyCancelBtn.addEventListener('click', clearReply);
 
-    window.addEventListener('DOMContentLoaded', () => {
-        const storedUsername = localStorage.getItem('chat_username');
-        const storedColor    = localStorage.getItem('chat_color') || '#FFFFFF';
-        if (storedUsername) {
-            username = storedUsername;
-            if (colorInput) colorInput.value = storedColor;
-            initializeChat(storedColor);
-        } else {
-            usernameModal.style.display = 'flex';
+    // ── Auth flow ────────────────────────────────────────────────────────
+    // Views
+    const vLogin    = document.getElementById('auth-login');
+    const vRegister = document.getElementById('auth-register');
+    const vVerify   = document.getElementById('auth-verify');
+    function showView(v) {
+        [vLogin, vRegister, vVerify].forEach(el => el.style.display = 'none');
+        v.style.display = '';
+    }
+    document.getElementById('go-register').addEventListener('click', e => { e.preventDefault(); showView(vRegister); });
+    document.getElementById('go-login').addEventListener('click',    e => { e.preventDefault(); showView(vLogin); });
+
+    // Remember which username is pending verification
+    let pendingVerifyUsername = null;
+
+    // Login
+    document.getElementById('login-btn').addEventListener('click', async () => {
+        const u = document.getElementById('login-username').value.trim();
+        const p = document.getElementById('login-password').value;
+        const err = document.getElementById('login-error');
+        err.textContent = '';
+        if (!u || !p) { err.textContent = 'fill in all fields'; return; }
+        try {
+            const r = await fetch(`${SERVER}/api/login`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const d = await r.json();
+            if (d.needsVerify) {
+                pendingVerifyUsername = u;
+                showView(vVerify);
+                return;
+            }
+            if (!d.success) { err.textContent = d.message; return; }
+            localStorage.setItem('hc_token', d.token);
+            localStorage.setItem('chat_username', d.username);
+            localStorage.setItem('chat_color', d.color);
+            authModal.style.display = 'none';
+            username = d.username; userColor = d.color;
+            initializeChat(d.color);
+        } catch(e) { err.textContent = 'server error — try again'; }
+    });
+
+    // Register
+    document.getElementById('reg-btn').addEventListener('click', async () => {
+        const u = document.getElementById('reg-username').value.trim();
+        const e = document.getElementById('reg-email').value.trim();
+        const p = document.getElementById('reg-password').value;
+        const c = document.getElementById('reg-color').value;
+        const err = document.getElementById('reg-error');
+        err.textContent = '';
+        if (!u || !e || !p) { err.textContent = 'fill in all fields'; return; }
+        try {
+            const r = await fetch(`${SERVER}/api/register`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ username: u, email: e, password: p, color: c })
+            });
+            const d = await r.json();
+            if (!d.success) { err.textContent = d.message; return; }
+            pendingVerifyUsername = u;
+            showView(vVerify);
+        } catch(e) { err.textContent = 'server error — try again'; }
+    });
+
+    // Verify
+    document.getElementById('verify-btn').addEventListener('click', async () => {
+        const code = document.getElementById('verify-code').value.trim();
+        const err  = document.getElementById('verify-error');
+        err.textContent = '';
+        if (!code || !pendingVerifyUsername) { err.textContent = 'enter the code from your email'; return; }
+        try {
+            const r = await fetch(`${SERVER}/api/verify-email`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ username: pendingVerifyUsername, code })
+            });
+            const d = await r.json();
+            if (!d.success) { err.textContent = d.message; return; }
+            // Auto-login after verify
+            showView(vLogin);
+            document.getElementById('login-username').value = pendingVerifyUsername;
+            document.getElementById('login-error').textContent = '✓ verified — log in now';
+        } catch(e) { err.textContent = 'server error — try again'; }
+    });
+
+    // Enter key support for login/register
+    ['login-password','login-username'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
+    });
+
+    // ── Boot: try stored token, else show modal ──────────────────────────
+    window.addEventListener('DOMContentLoaded', async () => {
+        const token    = localStorage.getItem('hc_token');
+        const storedUser  = localStorage.getItem('chat_username');
+        const storedColor = localStorage.getItem('chat_color') || '#FFFFFF';
+
+        if (token) {
+            try {
+                const r = await fetch(`${SERVER}/api/me?token=${token}`);
+                const d = await r.json();
+                if (d.success) {
+                    // Valid session — skip the modal entirely
+                    username  = d.username;
+                    userColor = d.color;
+                    localStorage.setItem('chat_username', d.username);
+                    localStorage.setItem('chat_color', d.color);
+                    authModal.style.display = 'none';
+                    initializeChat(d.color);
+                    return;
+                }
+            } catch(e) {}
         }
+
+        // Fallback: if we have a stored username (old-style pre-accounts), auto-fill the login
+        if (storedUser) document.getElementById('login-username').value = storedUser;
+        authModal.style.display = 'flex';
     });
 
-    usernameForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const entered = usernameInput.value.trim();
-        if (entered.length > 8) { alert('Username must be 8 characters or less.'); return; }
-        if (!entered) return;
-        username = entered;
-        const selectedColor = document.getElementById('color-input').value;
-        localStorage.setItem('chat_username', username);
-        localStorage.setItem('chat_color', selectedColor);
-        usernameModal.style.display = 'none';
-        initializeChat(selectedColor);
-    });
 
-    function initializeChat(selectedColor) {
-        socket = io(SERVER_URL, {
-            query: { username, color: selectedColor },
+    // ── initializeChat ───────────────────────────────────────────────────
+    function initializeChat(color) {
+        socket = io(SERVER, {
+            query: { username, color },
             reconnection: true, reconnectionAttempts: 5,
             reconnectionDelay: 1000, reconnectionDelayMax: 5000
         });
-
-        socket.on('chat_message', (data) => {
-            displayMessage(data.username, data.message, data.timestamp,
-                           data.color, data.image, data.replyTo);
-            if (data.image) socket.emit('image_posted');
-        });
-
-        socket.on('scroll_to_latest', () => { chatMessages.scrollTop = chatMessages.scrollHeight; });
 
         socket.on('connect', () => {
             connectionStatus.textContent = 'Connected';
             connectionStatus.style.color = '#4CAF50';
             socket.emit('user_join', { username });
             loadMessages(1);
+            loadAllUsers(); // populate the full user panel
         });
-
         socket.on('disconnect', () => {
             connectionStatus.textContent = 'Disconnected';
             connectionStatus.style.color = '#ff6b6b';
         });
 
+        socket.on('chat_message', (data) => {
+            displayMessage(data.username, data.message, data.timestamp, data.color, data.image, data.replyTo);
+        });
+        socket.on('scroll_to_latest', () => { chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; });
+
         socket.on('chat_history', (data) => {
             loadingIndicator.style.display = 'none';
             isLoading = false;
             if (data.userColors) userColors = data.userColors;
-            if (currentPage === 1) { chatMessages.innerHTML = ''; lastMessageSender = null; }
+            if (currentPage === 1) { chatMessagesEl.innerHTML = ''; }
 
             const messagesArray = [];
             data.messages.forEach((msg, index) => {
                 if (msg.type === 'system') {
-                    messagesArray.push(createSystemMessageElement(msg.message, msg.timestamp));
-                    lastMessageSender = null;
+                    messagesArray.push(createSystemMessageElement(msg.message));
                 } else {
-                    let isContinuation = false;
+                    let isCont = false;
                     if (currentPage > 1 && index > 0 && !msg.replyTo) {
                         const prev = data.messages[index - 1];
-                        isContinuation = prev.type !== 'system' && prev.username === msg.username;
+                        isCont = prev.type !== 'system' && prev.username === msg.username;
                     }
-                    const msgColor = msg.color || userColors[msg.username];
-                    messagesArray.push(
-                        createMessageElement(msg.username, msg.message, msg.timestamp,
-                                             isContinuation, msgColor, msg.image, msg.replyTo)
-                    );
+                    messagesArray.push(createMessageElement(
+                        msg.username, msg.message, msg.timestamp,
+                        isCont, msg.color || userColors[msg.username], msg.image, msg.replyTo
+                    ));
                 }
             });
 
             if (currentPage === 1) {
                 messagesArray.reverse();
                 recalcContinuations(messagesArray);
-                for (let i = messagesArray.length - 1; i >= 0; i--) {
-                    const el = messagesArray[i];
-                    if (!el.classList.contains('system-message')) {
-                        const sEl = el.querySelector('.message-sender');
-                        if (sEl) { lastMessageSender = sEl.getAttribute('data-sender'); break; }
-                    }
-                }
-            } else { recalcContinuations(messagesArray); }
-
-            const fragment = document.createDocumentFragment();
-            messagesArray.forEach(el => fragment.appendChild(el));
-
-            if (currentPage === 1) {
-                chatMessages.appendChild(fragment);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
             } else {
-                chatMessages.insertBefore(fragment, chatMessages.firstChild);
+                recalcContinuations(messagesArray);
+            }
+
+            const frag = document.createDocumentFragment();
+            messagesArray.forEach(el => frag.appendChild(el));
+            if (currentPage === 1) {
+                chatMessagesEl.appendChild(frag);
+                chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+            } else {
+                chatMessagesEl.insertBefore(frag, chatMessagesEl.firstChild);
             }
             loadMoreBtn.disabled = (data.messages.length < 20);
         });
 
-        socket.on('user_join', (data) => {
-            displaySystemMessage(`${data.username} has joined the chat`, new Date().toISOString());
+        socket.on('user_join',  (data) => {
+            displaySystemMessage(`${data.username} has joined the chat`);
             if (data.userColors) userColors = data.userColors;
-            updateOnlineUsers(data.users);
+            loadAllUsers();
         });
         socket.on('user_leave', (data) => {
-            displaySystemMessage(`${data.username} has left the chat`, new Date().toISOString());
+            displaySystemMessage(`${data.username} has left the chat`);
             if (data.userColors) userColors = data.userColors;
-            updateOnlineUsers(data.users);
+            loadAllUsers();
         });
-        socket.on('update_users',  (data) => updateOnlineUsers(data.users));
+        socket.on('update_users',    () => loadAllUsers());
+        socket.on('refresh_all_users', () => loadAllUsers());
         socket.on('update_colors', (data) => {
             if (data.userColors) { userColors = data.userColors; updateDisplayedColors(); }
         });
@@ -277,24 +395,25 @@
         loadMoreBtn.addEventListener('click', () => {
             if (!isLoading) { currentPage++; loadMessages(currentPage); }
         });
-        document.getElementById('color-input').addEventListener('change', (e) => {
+        document.getElementById('color-input') && document.getElementById('color-input').addEventListener('change', (e) => {
             socket.emit('update_color', { color: e.target.value });
         });
         dndToggle.addEventListener('change', () => {
             isDndEnabled = dndToggle.checked;
-            if (socket) socket.emit('dnd_toggle', isDndEnabled);
+            socket.emit('dnd_toggle', isDndEnabled);
         });
 
         setupImageUpload();
+        initVoice();
 
         chatInput.addEventListener('paste', (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf('image') !== -1) {
-                    const file = items[i].getAsFile();
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
                     if (file.size > 5 * 1024 * 1024) { alert('Pasted image is too large. Max 5MB.'); return; }
                     selectedImage = file;
-                    chatInput.placeholder = 'Image pasted. Type a caption (optional) and send.';
+                    chatInput.placeholder = 'Image pasted. Type a caption and send.';
                     showImagePreview(file);
                     e.preventDefault();
                     return;
@@ -302,10 +421,65 @@
             }
         });
 
-        // Voice
-        initVoice();
+        chatInput.addEventListener('input', () => {
+            const pos = chatInput.selectionStart;
+            const before = chatInput.value.slice(0, pos);
+            const after  = chatInput.value.slice(pos);
+            const nb = replaceEmojis(before);
+            chatInput.value = nb + after;
+            chatInput.selectionStart = chatInput.selectionEnd = nb.length;
+        });
     }
 
+
+    // ── All-users panel (online + offline registered accounts) ───────────
+    async function loadAllUsers() {
+        try {
+            const r = await fetch(`${SERVER}/api/all-users`);
+            const d = await r.json();
+            if (!d.success) return;
+            renderAllUsers(d.users);
+        } catch(e) {}
+    }
+
+    function renderAllUsers(allUsers) {
+        onlineUsersEl.innerHTML = '';
+        const online  = allUsers.filter(u => u.online);
+        const offline = allUsers.filter(u => !u.online);
+
+        online.forEach(u => {
+            const item = document.createElement('div');
+            item.className = 'user-item';
+            const dot = document.createElement('span');
+            dot.className = 'user-dot'; // green via CSS
+            const label = document.createElement('span');
+            label.textContent = u.username;
+            label.style.color = u.color || userColors[u.username] || '#e0e0e0';
+            item.appendChild(dot); item.appendChild(label);
+            onlineUsersEl.appendChild(item);
+        });
+
+        if (offline.length > 0) {
+            const divider = document.createElement('div');
+            divider.className = 'offline-divider';
+            divider.textContent = '── offline ──';
+            onlineUsersEl.appendChild(divider);
+
+            offline.forEach(u => {
+                const item = document.createElement('div');
+                item.className = 'user-item user-offline';
+                const dot = document.createElement('span');
+                dot.className = 'user-dot user-dot-offline'; // grey
+                const label = document.createElement('span');
+                label.textContent = u.username;
+                label.style.color = '#555';
+                item.appendChild(dot); item.appendChild(label);
+                onlineUsersEl.appendChild(item);
+            });
+        }
+    }
+
+    // ── Message helpers ──────────────────────────────────────────────────
     function recalcContinuations(elements) {
         const GAP_MS = 5 * 60 * 1000;
         let prevSender = null, prevTs = null;
@@ -333,89 +507,15 @@
         socket.emit('load_messages', { page });
     }
 
-    function setupImageUpload() {
-        const imageUpload = document.getElementById('image-upload');
-        imageUpload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            if (!file.type.startsWith('image/')) { alert('Please select an image file.'); imageUpload.value=''; return; }
-            if (file.size > 5*1024*1024) { alert('Image must be under 5 MB.'); imageUpload.value=''; return; }
-            selectedImage = file;
-            chatInput.placeholder = `Image "${file.name}" selected. Type a caption (optional) and send.`;
-        });
-
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            let message = replaceEmojis(chatInput.value.trim());
-            if (!message && !selectedImage) return;
-            if (!socket || isUploading) return;
-            const currentReply = replyingTo ? { ...replyingTo } : null;
-
-            // Clear paste preview immediately on send
-            const pastePreview = document.getElementById('paste-preview');
-            if (pastePreview) pastePreview.remove();
-
-            if (selectedImage) {
-                isUploading = true;
-                const loader = document.createElement('div');
-                loader.className = 'image-loader';
-                chatForm.appendChild(loader);
-                const formData = new FormData();
-                formData.append('image', selectedImage);
-                try {
-                    const response = await fetch(SERVER_URL + '/upload', {
-                        method: 'POST', body: formData,
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                    });
-                    if (!response.ok) throw new Error(`Server ${response.status}`);
-                    const ct = response.headers.get('content-type');
-                    if (!ct || !ct.includes('application/json')) throw new Error('Server did not return JSON');
-                    const result = await response.json();
-                    if (result.success) {
-                        let imagePath = result.filePath;
-                        if (imagePath && !imagePath.startsWith('http'))
-                            imagePath = SERVER_URL + (imagePath.startsWith('/') ? '' : '/') + imagePath;
-                        socket.emit('chat_message', { message, image: imagePath, replyTo: currentReply });
-                    } else { alert('Upload failed: ' + (result.message || 'unknown error')); }
-                } catch (err) { alert('Upload error: ' + (err.message || err)); }
-                finally {
-                    isUploading = false; selectedImage = null;
-                    chatInput.placeholder = 'Type your message...';
-                    chatForm.removeChild(loader);
-                }
-            } else {
-                socket.emit('chat_message', { message, replyTo: currentReply });
-            }
-
-            chatInput.value = '';
-            document.getElementById('image-upload').value = '';
-            chatInput.focus();
-            clearReply();
-        });
-    }
-
-    // ── createMessageElement ──────────────────────────────────────────────
-    // Reply visual: Reddit/GitHub style — a vertical colored bar on the LEFT
-    // of a block that sits INSIDE .message-content (the right column).
-    // This means the bar + indented text comes off the END of the row, not
-    // off the username column on the left.
-    //
-    // Row layout:
-    //   ave  ~  │ ave: original text...   ← .reply-ref (faded)
-    //           │ perfect                 ← .reply-body
-    //
-    // Click anywhere on a message (text OR name) to reply.
-    function createMessageElement(sender, message, timestamp,
-                                  isContinuation=false, color, image=null, replyTo=null) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message';
-        if (isContinuation) messageDiv.classList.add('continued-message');
-        if (replyTo) messageDiv.classList.add('is-reply');
-        if (timestamp) messageDiv.setAttribute('data-ts', new Date(timestamp).getTime());
+    function createMessageElement(sender, message, timestamp, isContinuation=false, color, image=null, replyTo=null) {
+        const div = document.createElement('div');
+        div.className = 'message';
+        if (isContinuation) div.classList.add('continued-message');
+        if (replyTo) div.classList.add('is-reply');
+        if (timestamp) div.setAttribute('data-ts', new Date(timestamp).getTime());
 
         const msgColor = color || userColors[sender] || null;
 
-        // Left column: username
         const usernameArea = document.createElement('div');
         usernameArea.className = 'username-area';
         const senderEl = document.createElement('span');
@@ -424,83 +524,57 @@
         senderEl.textContent = sender;
         if (msgColor) senderEl.style.color = msgColor;
         senderEl.style.cursor = 'pointer';
-        senderEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            setReply({ username: sender, message: message || '', color: msgColor });
-        });
+        senderEl.addEventListener('click', e => { e.stopPropagation(); setReply({ username: sender, message: message || '', color: msgColor }); });
         const sep = document.createElement('span');
-        sep.className = 'message-separator';
-        sep.textContent = ' ~ ';
-        usernameArea.appendChild(senderEl);
-        usernameArea.appendChild(sep);
+        sep.className = 'message-separator'; sep.textContent = ' ~ ';
+        usernameArea.appendChild(senderEl); usernameArea.appendChild(sep);
 
-        // Right column: message content — clicking triggers reply
-        const messageContent = document.createElement('div');
-        messageContent.className = 'message-content';
-        if (msgColor) messageContent.style.color = msgColor;
-        messageContent.style.cursor = 'pointer';
-        messageContent.title = 'Click to reply';
-        messageContent.addEventListener('click', () => {
-            setReply({ username: sender, message: message || '', color: msgColor });
-        });
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        if (msgColor) content.style.color = msgColor;
+        content.style.cursor = 'pointer';
+        content.title = 'Click to reply';
+        content.addEventListener('click', () => setReply({ username: sender, message: message || '', color: msgColor }));
 
         if (replyTo) {
             const replyLineColor = replyTo.color || userColors[replyTo.username] || '#555';
-
-            // .reply-thread is the bordered block — border-left IS the vertical bar
             const thread = document.createElement('div');
             thread.className = 'reply-thread';
             thread.style.setProperty('--thread-color', replyLineColor);
-
-            // Faded quote line: "ave: original text..."
             const refLine = document.createElement('div');
             refLine.className = 'reply-ref';
             const refAuthor = document.createElement('span');
-            refAuthor.className = 'reply-ref-author';
-            refAuthor.textContent = replyTo.username;
-            refAuthor.style.color = replyLineColor;
+            refAuthor.className = 'reply-ref-author'; refAuthor.textContent = replyTo.username; refAuthor.style.color = replyLineColor;
             const refText = document.createElement('span');
             refText.className = 'reply-ref-text';
             const raw = replyTo.message || '[image]';
             refText.textContent = ': ' + (raw.length > 55 ? raw.substring(0,55)+'…' : raw);
-            refLine.appendChild(refAuthor);
-            refLine.appendChild(refText);
-
-            // Actual reply text / image
+            refLine.appendChild(refAuthor); refLine.appendChild(refText);
             const replyBody = document.createElement('div');
             replyBody.className = 'reply-body';
             if (msgColor) replyBody.style.color = msgColor;
-            if (message && message.length > 0) replyBody.appendChild(document.createTextNode(message));
-            if (image) {
-                const img = document.createElement('img');
-                img.src = image; img.className = 'message-image'; img.alt = 'Shared image';
-                img.onerror = () => { img.alt = 'Image failed to load'; };
-                img.addEventListener('click', (e) => { e.stopPropagation(); window.open(image, '_blank'); });
-                if (message && message.length > 0) replyBody.appendChild(document.createElement('br'));
-                replyBody.appendChild(img);
-            }
-
-            thread.appendChild(refLine);
-            thread.appendChild(replyBody);
-            messageContent.appendChild(thread);
+            if (message) replyBody.appendChild(document.createTextNode(message));
+            if (image) { const img = makeImg(image); if (message) replyBody.appendChild(document.createElement('br')); replyBody.appendChild(img); }
+            thread.appendChild(refLine); thread.appendChild(replyBody);
+            content.appendChild(thread);
         } else {
-            if (message && message.length > 0) messageContent.appendChild(document.createTextNode(message));
-            if (image) {
-                const img = document.createElement('img');
-                img.src = image; img.className = 'message-image'; img.alt = 'Shared image';
-                img.onerror = () => { img.alt = 'Image failed to load'; };
-                img.addEventListener('click', (e) => { e.stopPropagation(); window.open(image, '_blank'); });
-                if (message && message.length > 0) messageContent.appendChild(document.createElement('br'));
-                messageContent.appendChild(img);
-            }
+            if (message) content.appendChild(document.createTextNode(message));
+            if (image) { const img = makeImg(image); if (message) content.appendChild(document.createElement('br')); content.appendChild(img); }
         }
 
-        messageDiv.appendChild(usernameArea);
-        messageDiv.appendChild(messageContent);
-        return messageDiv;
+        div.appendChild(usernameArea); div.appendChild(content);
+        return div;
     }
 
-    function createSystemMessageElement(message, timestamp) {
+    function makeImg(src) {
+        const img = document.createElement('img');
+        img.src = src; img.className = 'message-image'; img.alt = 'Shared image';
+        img.onerror = () => { img.alt = 'Image failed to load'; };
+        img.addEventListener('click', e => { e.stopPropagation(); window.open(src, '_blank'); });
+        return img;
+    }
+
+    function createSystemMessageElement(message) {
         const div = document.createElement('div');
         div.className = 'system-message';
         div.textContent = message;
@@ -508,44 +582,24 @@
     }
 
     function displayMessage(sender, message, timestamp, color, image=null, replyTo=null) {
+        const allMsgs = chatMessagesEl.querySelectorAll('.message:not(.system-message)');
         let lastDOMSender = null;
-        const allMsgs = chatMessages.querySelectorAll('.message:not(.system-message)');
         if (allMsgs.length > 0) {
-            const lastEl = allMsgs[allMsgs.length - 1];
-            const sEl = lastEl.querySelector('.message-sender');
+            const sEl = allMsgs[allMsgs.length-1].querySelector('.message-sender');
             if (sEl) lastDOMSender = sEl.getAttribute('data-sender');
         }
-        const lastChild = chatMessages.lastElementChild;
+        const lastChild = chatMessagesEl.lastElementChild;
         const lastIsSystem = lastChild && lastChild.classList.contains('system-message');
-        const isContinuation = !replyTo && !lastIsSystem && (lastDOMSender === sender);
-        const el = createMessageElement(sender, message, timestamp, isContinuation, color, image, replyTo);
-        chatMessages.appendChild(el);
-        lastMessageSender = sender;
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        const isCont = !replyTo && !lastIsSystem && lastDOMSender === sender;
+        const el = createMessageElement(sender, message, timestamp, isCont, color, image, replyTo);
+        chatMessagesEl.appendChild(el);
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
 
-    function displaySystemMessage(message, timestamp) {
-        const el = createSystemMessageElement(message, timestamp);
-        chatMessages.appendChild(el);
-        lastMessageSender = null;
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    function updateOnlineUsers(users) {
-        if (!users) return;
-        onlineUsers.innerHTML = '';
-        users.forEach(user => {
-            const item  = document.createElement('div');
-            item.className = 'user-item' + (user.dnd ? ' user-dnd' : '');
-            const dot   = document.createElement('span');
-            dot.className  = 'user-dot';
-            const label = document.createElement('span');
-            label.textContent = user.username;
-            if (userColors[user.username]) label.style.color = userColors[user.username];
-            item.appendChild(dot);
-            item.appendChild(label);
-            onlineUsers.appendChild(item);
-        });
+    function displaySystemMessage(message) {
+        const el = createSystemMessageElement(message);
+        chatMessagesEl.appendChild(el);
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
 
     function updateDisplayedColors() {
@@ -561,71 +615,76 @@
         });
     }
 
-    function isTabActive() { return !document.hidden; }
 
-    const mp3Source = document.createElement('source');
-    mp3Source.src = 'public/sounds/notif.mp3'; mp3Source.type = 'audio/mpeg';
-    const wavSource = document.createElement('source');
-    wavSource.src = 'public/sounds/notif.wav'; wavSource.type = 'audio/wav';
-    notificationSound.appendChild(mp3Source);
-    notificationSound.appendChild(wavSource);
-
-    function playNotificationSound() {
-        if (isDndEnabled) return;
-        notificationSound.currentTime = 0; notificationSound.volume = 0.5;
-        const p = notificationSound.play();
-        if (p) p.catch(() => {});
-    }
-
-    let enableSounds = localStorage.getItem('enable_sounds') === 'true';
-    const animalSounds = {};
-    'abcdefghijklmnopqrstuvwxyz'.split('').forEach(letter => {
-        const s = new Audio(`public/sounds/animal/${letter}.wav`);
-        s.volume = 0.2; animalSounds[letter] = s;
-    });
-    chatInput.addEventListener('keydown', (e) => {
-        if (!enableSounds) return;
-        const key = e.key.toLowerCase();
-        if (animalSounds[key]) { animalSounds[key].currentTime = 0; animalSounds[key].play().catch(() => {}); }
-    });
-
-    chatInput.addEventListener('input', () => {
-        const pos = chatInput.selectionStart;
-        const before = chatInput.value.slice(0, pos);
-        const after  = chatInput.value.slice(pos);
-        const newBefore = replaceEmojis(before);
-        chatInput.value = newBefore + after;
-        chatInput.selectionStart = chatInput.selectionEnd = newBefore.length;
-    });
-
-    if ('Notification' in window) {
-        Notification.requestPermission().then(p => {
-            if (p === 'granted') console.log('Notification permission granted.');
-        });
-    }
-
+    // ── Image upload ─────────────────────────────────────────────────────
     function showImagePreview(file) {
         const old = document.getElementById('paste-preview');
         if (old) old.remove();
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = e => {
             const img = document.createElement('img');
             img.id = 'paste-preview'; img.src = e.target.result;
-            img.className = 'image-preview';
             img.style.cssText = 'max-width:120px;max-height:80px;margin:4px 8px 0;display:block;';
             chatForm.parentNode.insertBefore(img, chatForm);
         };
         reader.readAsDataURL(file);
     }
 
-    document.addEventListener('visibilitychange', () => {});
+    function setupImageUpload() {
+        const imageUpload = document.getElementById('image-upload');
+        imageUpload.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { alert('Please select an image file.'); imageUpload.value=''; return; }
+            if (file.size > 5*1024*1024) { alert('Image must be under 5 MB.'); imageUpload.value=''; return; }
+            selectedImage = file;
+            chatInput.placeholder = `Image "${file.name}" selected. Type a caption and send.`;
+        });
 
-    // ── Register service worker (PWA) ─────────────────────────────────────
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        chatForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            let message = replaceEmojis(chatInput.value.trim());
+            if (!message && !selectedImage) return;
+            if (!socket || isUploading) return;
+            const currentReply = replyingTo ? { ...replyingTo } : null;
+
+            const pastePreview = document.getElementById('paste-preview');
+            if (pastePreview) pastePreview.remove();
+
+            if (selectedImage) {
+                isUploading = true;
+                const loader = document.createElement('div');
+                loader.className = 'image-loader';
+                chatForm.appendChild(loader);
+                const formData = new FormData();
+                formData.append('image', selectedImage);
+                try {
+                    const response = await fetch(`${SERVER}/upload`, { method: 'POST', body: formData });
+                    if (!response.ok) throw new Error(`Server ${response.status}`);
+                    const result = await response.json();
+                    if (result.success) {
+                        let imgPath = result.filePath;
+                        if (imgPath && !imgPath.startsWith('http')) imgPath = SERVER + (imgPath.startsWith('/') ? '' : '/') + imgPath;
+                        socket.emit('chat_message', { message, image: imgPath, replyTo: currentReply });
+                    } else { alert('Upload failed: ' + (result.message || 'unknown')); }
+                } catch(err) { alert('Upload error: ' + err.message); }
+                finally {
+                    isUploading = false; selectedImage = null;
+                    chatInput.placeholder = 'Type your message...';
+                    chatForm.removeChild(loader);
+                }
+            } else {
+                socket.emit('chat_message', { message, replyTo: currentReply });
+            }
+
+            chatInput.value = '';
+            imageUpload.value = '';
+            chatInput.focus();
+            clearReply();
+        });
     }
 
-    // ── Voice Chat ────────────────────────────────────────────────────────
+    // ── Voice Chat ───────────────────────────────────────────────────────
     function initVoice() {
         const joinBtn    = document.getElementById('voice-join-btn');
         const membersEl  = document.getElementById('voice-members');
@@ -635,9 +694,9 @@
 
         let inVoice = false, isMuted = false, isDeafened = false;
         let localStream = null;
-        const peers    = {};   // socketId -> RTCPeerConnection
-        const audioEls = {};   // socketId -> <audio>
-        let voiceMembers = {}; // socketId -> { username, muted }
+        const peers    = {};
+        const audioEls = {};
+        let voiceMembers = {};
 
         const iceConfig = {
             iceServers: [
@@ -648,11 +707,10 @@
 
         function renderMembers() {
             membersEl.innerHTML = '';
-            // Show self first
             if (inVoice) {
                 const self = document.createElement('div');
                 self.className = 'voice-member self';
-                self.innerHTML = `<span class="voice-member-icon">${isMuted ? '🔇' : '🎙'}</span><span>${username} <span style="color:#555;font-size:0.65em">(you)</span></span>`;
+                self.innerHTML = `<span class="voice-member-icon">${isMuted ? '🔇' : '🎙'}</span><span>${username} <span style="color:#555;font-size:.65em">(you)</span></span>`;
                 membersEl.appendChild(self);
             }
             Object.values(voiceMembers).forEach(({ username: u, muted }) => {
@@ -664,12 +722,10 @@
         }
 
         async function joinVoice() {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            } catch(e) { alert('Microphone access denied: ' + e.message); return; }
+            try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
+            catch(e) { alert('Microphone access denied: ' + e.message); return; }
             inVoice = true;
-            joinBtn.textContent = 'leave';
-            joinBtn.classList.add('active');
+            joinBtn.textContent = 'leave'; joinBtn.classList.add('active');
             controlsEl.style.display = 'flex';
             renderMembers();
             socket.emit('voice_join', { username });
@@ -684,13 +740,10 @@
             Object.keys(audioEls).forEach(id => delete audioEls[id]);
             voiceMembers = {};
             inVoice = false; isMuted = false; isDeafened = false;
-            joinBtn.textContent = 'join';
-            joinBtn.classList.remove('active');
+            joinBtn.textContent = 'join'; joinBtn.classList.remove('active');
             controlsEl.style.display = 'none';
-            muteBtn.classList.remove('active');
-            deafBtn.classList.remove('active');
-            muteBtn.textContent = '🎤 mute';
-            deafBtn.textContent = '🔇 deafen';
+            muteBtn.classList.remove('active'); deafBtn.classList.remove('active');
+            muteBtn.textContent = '🎤 mute'; deafBtn.textContent = '🔇 deafen';
             renderMembers();
         }
 
@@ -716,34 +769,17 @@
             if (peers[remoteId]) return peers[remoteId];
             const pc = new RTCPeerConnection(iceConfig);
             peers[remoteId] = pc;
-
-            // Add ALL local tracks to every peer connection
-            if (localStream) {
-                localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-            }
-
-            pc.onicecandidate = e => {
-                if (e.candidate) socket.emit('voice_ice', { to: remoteId, candidate: e.candidate });
-            };
-
+            if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+            pc.onicecandidate = e => { if (e.candidate) socket.emit('voice_ice', { to: remoteId, candidate: e.candidate }); };
             pc.ontrack = e => {
                 let audio = audioEls[remoteId];
                 if (!audio) {
                     audio = document.createElement('audio');
-                    audio.autoplay = true;
-                    audio.muted = isDeafened;
-                    // Must be added to DOM for autoplay policies
-                    audio.style.display = 'none';
-                    document.body.appendChild(audio);
-                    audioEls[remoteId] = audio;
+                    audio.autoplay = true; audio.muted = isDeafened; audio.style.display = 'none';
+                    document.body.appendChild(audio); audioEls[remoteId] = audio;
                 }
-                // Always reassign srcObject when a new track arrives
-                if (e.streams && e.streams[0]) {
-                    audio.srcObject = e.streams[0];
-                    audio.play().catch(() => {});
-                }
+                if (e.streams && e.streams[0]) { audio.srcObject = e.streams[0]; audio.play().catch(()=>{}); }
             };
-
             pc.onnegotiationneeded = async () => {
                 if (initiator) {
                     try {
@@ -753,35 +789,20 @@
                     } catch(e) { console.error('Offer error:', e); }
                 }
             };
-
             return pc;
         }
 
         socket.on('voice_user_joined', async ({ socketId, username: u }) => {
-            voiceMembers[socketId] = { username: u, muted: false };
-            renderMembers();
-            if (inVoice) {
-                // We are already in voice — initiate connection to the new joiner
-                await createPeer(socketId, true);
-            }
+            voiceMembers[socketId] = { username: u, muted: false }; renderMembers();
+            if (inVoice) await createPeer(socketId, true);
         });
-
         socket.on('voice_current_members', async (members) => {
-            // We just joined — server sends us everyone already in voice
-            members.forEach(({ socketId, username: u }) => {
-                voiceMembers[socketId] = { username: u, muted: false };
-            });
+            members.forEach(({ socketId, username: u }) => { voiceMembers[socketId] = { username: u, muted: false }; });
             renderMembers();
-            // Existing members will send us offers via voice_user_joined on their end
-            // We just need to be ready to receive — createPeer as non-initiator
-            for (const { socketId } of members) {
-                await createPeer(socketId, false);
-            }
+            for (const { socketId } of members) await createPeer(socketId, false);
         });
-
         socket.on('voice_offer', async ({ from, offer }) => {
-            let pc = peers[from];
-            if (!pc) pc = await createPeer(from, false);
+            let pc = peers[from]; if (!pc) pc = await createPeer(from, false);
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(offer));
                 const answer = await pc.createAnswer();
@@ -789,37 +810,29 @@
                 socket.emit('voice_answer', { to: from, answer: pc.localDescription });
             } catch(e) { console.error('voice_offer error:', e); }
         });
-
         socket.on('voice_answer', async ({ from, answer }) => {
             const pc = peers[from];
             if (pc && pc.signalingState !== 'stable') {
-                try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); }
-                catch(e) { console.error('voice_answer error:', e); }
+                try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); } catch(e) {}
             }
         });
-
         socket.on('voice_ice', async ({ from, candidate }) => {
             const pc = peers[from];
-            if (pc && pc.remoteDescription) {
-                try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
-                catch(e) {}
-            }
+            if (pc && pc.remoteDescription) { try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {} }
         });
-
         socket.on('voice_user_left', ({ socketId }) => {
             if (peers[socketId]) { peers[socketId].close(); delete peers[socketId]; }
-            if (audioEls[socketId]) {
-                audioEls[socketId].srcObject = null;
-                audioEls[socketId].remove();
-                delete audioEls[socketId];
-            }
-            delete voiceMembers[socketId];
-            renderMembers();
+            if (audioEls[socketId]) { audioEls[socketId].srcObject = null; audioEls[socketId].remove(); delete audioEls[socketId]; }
+            delete voiceMembers[socketId]; renderMembers();
         });
-
         socket.on('voice_mute_update', ({ socketId, muted }) => {
             if (voiceMembers[socketId]) { voiceMembers[socketId].muted = muted; renderMembers(); }
         });
+    }
+
+    // ── PWA service worker ───────────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
 </body>
