@@ -10,8 +10,7 @@ const { v2: cloudinary } = require('cloudinary');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// ─── Cloudinary config (set these in Render Environment Variables) ─────────
-// CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+// ─── Cloudinary config ─────────────────────────────────────────────
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key:    process.env.CLOUDINARY_API_KEY,
@@ -19,19 +18,25 @@ cloudinary.config({
 });
 
 const app = express();
+
 app.use(cors());
-// Remove Express body size limits for clip uploads (multer handles multipart directly)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// Serve static assets from /public (sounds, uploads, etc.)
+
+// ─── STATIC FILES ──────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
-// Serve root-level HTML files (chat.html, clips.html, settings.html, index.html)
 app.use(express.static(path.join(__dirname)));
 
 const server = http.createServer(app);
+
 const io = socketIo(server, {
     cors: {
-        origin: ["https://hatchat.blakrr.works", "http://hatchat.blakrr.works", "https://averrgy-github-io.onrender.com", "*"],
+        origin: [
+            "https://hatchat.blakrr.works",
+            "http://hatchat.blakrr.works",
+            "https://averrgy-github-io.onrender.com",
+            "*"
+        ],
         methods: ["GET", "POST"]
     }
 });
