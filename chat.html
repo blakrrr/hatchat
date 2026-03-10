@@ -128,7 +128,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script>
     // ── Constants ────────────────────────────────────────────────────────
-    const SERVER = window.location.origin;
+    // In Electron, window.location.origin is "file://" which breaks fetch calls.
+    // Always point at the real server regardless of how the page is loaded.
+    const SERVER = (window.location.protocol === 'file:')
+        ? 'https://hatchat.blakrr.works'
+        : window.location.origin;
 
     // ── State ────────────────────────────────────────────────────────────
     let username = '', userColor = '#FFFFFF', socket;

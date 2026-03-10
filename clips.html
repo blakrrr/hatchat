@@ -83,7 +83,9 @@
     </div>
 
 <script>
-    const SERVER   = 'https://averrgy-github-io.onrender.com';
+    const SERVER = (window.location.protocol === 'file:')
+        ? 'https://hatchat.blakrr.works'
+        : window.location.origin;
     const username = localStorage.getItem('chat_username') || null;
 
     // ── Predefined palette for users (cycles if more than 8 users) ──
