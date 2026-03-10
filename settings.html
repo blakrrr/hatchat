@@ -128,6 +128,12 @@
                 <input type="checkbox" id="enable-sounds">
             </div>
         </div>
+
+        <div class="settings-section">
+            <h2>Account</h2>
+            <p style="font-size:.85rem;color:#888;margin-bottom:1rem">Logging out will clear your session. You'll need your password to get back in.</p>
+            <button type="button" id="logout-btn" class="form-button danger">log out</button>
+        </div>
     </div>
 
     <!-- Confirmation Modal -->
@@ -208,6 +214,15 @@
                 usernameInput.value = '';
                 colorInput.value    = '#FFFFFF';
                 showSuccess('Profile has been reset');
+            });
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            showConfirmation('Log out?', () => {
+                localStorage.removeItem('hc_token');
+                localStorage.removeItem('chat_username');
+                localStorage.removeItem('chat_color');
+                window.location.href = 'chat.html';
             });
         });
     </script>

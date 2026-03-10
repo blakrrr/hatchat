@@ -108,10 +108,6 @@
                     <input class="form-input" id="reg-username" placeholder="username" maxlength="8">
                 </div>
                 <div class="form-group">
-                    <label>Email</label>
-                    <input class="form-input" id="reg-email" type="email" placeholder="you@email.com">
-                </div>
-                <div class="form-group">
                     <label>Password</label>
                     <input class="form-input" id="reg-password" type="password" placeholder="password">
                 </div>
@@ -126,18 +122,6 @@
                 </p>
             </div>
 
-            <!-- VERIFY EMAIL -->
-            <div id="auth-verify" style="display:none">
-                <h2>verify email</h2>
-                <p style="font-size:.85rem;color:#888;margin-bottom:1rem">check your inbox for a 6-digit code</p>
-                <div class="form-group">
-                    <label>Code</label>
-                    <input class="form-input" id="verify-code" placeholder="123456" maxlength="6"
-                           style="letter-spacing:.3em;font-size:1.2rem">
-                </div>
-                <p id="verify-error" style="color:#cf6f6f;font-size:.8rem;min-height:1.2em;margin:.25rem 0"></p>
-                <button class="form-button" id="verify-btn">verify</button>
-            </div>
         </div>
     </div>
 
@@ -193,19 +177,14 @@
     replyCancelBtn.addEventListener('click', clearReply);
 
     // ── Auth flow ────────────────────────────────────────────────────────
-    // Views
     const vLogin    = document.getElementById('auth-login');
     const vRegister = document.getElementById('auth-register');
-    const vVerify   = document.getElementById('auth-verify');
     function showView(v) {
-        [vLogin, vRegister, vVerify].forEach(el => el.style.display = 'none');
+        [vLogin, vRegister].forEach(el => el.style.display = 'none');
         v.style.display = '';
     }
     document.getElementById('go-register').addEventListener('click', e => { e.preventDefault(); showView(vRegister); });
     document.getElementById('go-login').addEventListener('click',    e => { e.preventDefault(); showView(vLogin); });
-
-    // Remember which username is pending verification
-    let pendingVerifyUsername = null;
 
     // Login
     document.getElementById('login-btn').addEventListener('click', async () => {
@@ -220,11 +199,6 @@
                 body: JSON.stringify({ username: u, password: p })
             });
             const d = await r.json();
-            if (d.needsVerify) {
-                pendingVerifyUsername = u;
-                showView(vVerify);
-                return;
-            }
             if (!d.success) { err.textContent = d.message; return; }
             localStorage.setItem('hc_token', d.token);
             localStorage.setItem('chat_username', d.username);
@@ -235,44 +209,28 @@
         } catch(e) { err.textContent = 'server error — try again'; }
     });
 
-    // Register
+    // Register — creates account and logs in immediately, no email needed
     document.getElementById('reg-btn').addEventListener('click', async () => {
         const u = document.getElementById('reg-username').value.trim();
-        const e = document.getElementById('reg-email').value.trim();
         const p = document.getElementById('reg-password').value;
         const c = document.getElementById('reg-color').value;
         const err = document.getElementById('reg-error');
         err.textContent = '';
-        if (!u || !e || !p) { err.textContent = 'fill in all fields'; return; }
+        if (!u || !p) { err.textContent = 'fill in all fields'; return; }
         try {
             const r = await fetch(`${SERVER}/api/register`, {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ username: u, email: e, password: p, color: c })
+                body: JSON.stringify({ username: u, password: p, color: c })
             });
             const d = await r.json();
             if (!d.success) { err.textContent = d.message; return; }
-            pendingVerifyUsername = u;
-            showView(vVerify);
-        } catch(e) { err.textContent = 'server error — try again'; }
-    });
-
-    // Verify
-    document.getElementById('verify-btn').addEventListener('click', async () => {
-        const code = document.getElementById('verify-code').value.trim();
-        const err  = document.getElementById('verify-error');
-        err.textContent = '';
-        if (!code || !pendingVerifyUsername) { err.textContent = 'enter the code from your email'; return; }
-        try {
-            const r = await fetch(`${SERVER}/api/verify-email`, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ username: pendingVerifyUsername, code })
-            });
-            const d = await r.json();
-            if (!d.success) { err.textContent = d.message; return; }
-            // Auto-login after verify
-            showView(vLogin);
-            document.getElementById('login-username').value = pendingVerifyUsername;
-            document.getElementById('login-error').textContent = '✓ verified — log in now';
+            // Registration returns a token — log straight in
+            localStorage.setItem('hc_token', d.token);
+            localStorage.setItem('chat_username', d.username);
+            localStorage.setItem('chat_color', d.color);
+            authModal.style.display = 'none';
+            username = d.username; userColor = d.color;
+            initializeChat(d.color);
         } catch(e) { err.textContent = 'server error — try again'; }
     });
 

@@ -8,7 +8,6 @@ const multer = require('multer');
 const fsExtra = require('fs-extra');
 const { v2: cloudinary } = require('cloudinary');
 const bcrypt = require('bcrypt');
-const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 // ─── Cloudinary config (set these in Render Environment Variables) ─────────
@@ -270,7 +269,7 @@ const voiceMembers = {};
 const disconnectTimers = {};
 
 // ─── ACCOUNTS ─────────────────────────────────────────────────────────────
-// users.json: { username: { email, passwordHash, color, verified, verifyCode, verifyExpires, sessionTokens: [] } }
+// users.json stores: { username: { passwordHash, color, sessionTokens[] } }
 const USERS_FILE = path.join(__dirname, 'users.json');
 let registeredUsers = {};
 try {
@@ -286,63 +285,24 @@ function saveRegisteredUsers() {
     catch (e) { console.error('Error saving users:', e); }
 }
 
-// Nodemailer — set EMAIL_USER and EMAIL_PASS in Render env vars (Gmail app password)
-const mailer = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-});
-
-async function sendVerifyEmail(to, code) {
-    if (!process.env.EMAIL_USER) return; // skip if not configured
-    await mailer.sendMail({
-        from: `"hatchat" <${process.env.EMAIL_USER}>`,
-        to,
-        subject: 'hatchat — verify your account',
-        text: `Your verification code is: ${code}\n\nExpires in 15 minutes.`,
-        html: `<p style="font-family:monospace;font-size:1.1em">your verification code:<br><br><strong style="font-size:1.5em;letter-spacing:.2em">${code}</strong><br><br><small>expires in 15 minutes</small></p>`,
-    });
-}
-
-// POST /api/register
+// POST /api/register — username + password + color, no email needed
 app.post('/api/register', async (req, res) => {
-    const { email, username, password, color } = req.body || {};
-    if (!email || !username || !password) return res.status(400).json({ success: false, message: 'Missing fields' });
+    const { username, password, color } = req.body || {};
+    if (!username || !password) return res.status(400).json({ success: false, message: 'Missing fields' });
     if (username.length > 8) return res.status(400).json({ success: false, message: 'Username max 8 chars' });
     if (registeredUsers[username.toLowerCase()]) return res.status(409).json({ success: false, message: 'Username taken' });
-    const emailTaken = Object.values(registeredUsers).some(u => u.email === email.toLowerCase());
-    if (emailTaken) return res.status(409).json({ success: false, message: 'Email already registered' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const verifyCode   = String(Math.floor(100000 + Math.random() * 900000));
-    const verifyExpires = Date.now() + 15 * 60 * 1000;
+    const token = crypto.randomBytes(32).toString('hex');
 
     registeredUsers[username.toLowerCase()] = {
-        username, email: email.toLowerCase(), passwordHash,
-        color: color || '#FFFFFF', verified: false,
-        verifyCode, verifyExpires, sessionTokens: [],
+        username, passwordHash,
+        color: color || '#FFFFFF',
+        sessionTokens: [token],
     };
     saveRegisteredUsers();
 
-    try { await sendVerifyEmail(email, verifyCode); }
-    catch (e) { console.error('Email error:', e.message); }
-
-    res.json({ success: true, message: 'Registered — check your email for the verification code' });
-});
-
-// POST /api/verify-email
-app.post('/api/verify-email', (req, res) => {
-    const { username, code } = req.body || {};
-    const user = registeredUsers[username?.toLowerCase()];
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user.verified) return res.json({ success: true, message: 'Already verified' });
-    if (user.verifyCode !== code) return res.status(400).json({ success: false, message: 'Wrong code' });
-    if (Date.now() > user.verifyExpires) return res.status(400).json({ success: false, message: 'Code expired' });
-
-    user.verified = true;
-    user.verifyCode = null;
-    user.verifyExpires = null;
-    saveRegisteredUsers();
-    res.json({ success: true });
+    res.json({ success: true, token, username, color: color || '#FFFFFF' });
 });
 
 // POST /api/login
@@ -352,7 +312,6 @@ app.post('/api/login', async (req, res) => {
     if (!user) return res.status(401).json({ success: false, message: 'Wrong username or password' });
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ success: false, message: 'Wrong username or password' });
-    if (!user.verified) return res.status(403).json({ success: false, message: 'Email not verified yet', needsVerify: true });
 
     // Issue a session token
     const token = crypto.randomBytes(32).toString('hex');
