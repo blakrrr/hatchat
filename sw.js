@@ -2,7 +2,7 @@
 // Caches the app shell so it loads instantly and works offline.
 // Strategy: cache-first for static assets, network-first for API calls.
 
-const CACHE = 'hatchat-v2';
+const CACHE = 'hatchat-v3';
 const SHELL = [
   '/',
   '/chat.html',
