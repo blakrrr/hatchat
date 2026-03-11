@@ -40,7 +40,10 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
         const token = localStorage.getItem('hc_token');
         if (!token) return;
         try {
-            const r = await fetch(`${SERVER}/api/me?token=${token}`);
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 8000);
+            const r = await fetch(`${SERVER}/api/me?token=${token}`, { signal: ctrl.signal });
+            clearTimeout(t);
             if (!r.ok) return;
             const d = await r.json();
             if (!d.success) return;
