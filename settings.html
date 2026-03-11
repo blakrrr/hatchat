@@ -7,6 +7,7 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d0d0d">
     <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
+    <script src="hatchat-shared.js"></script>
     <style>
         body {
             font-family: DejaVu Sans Mono, monospace;
@@ -85,7 +86,7 @@
 </head>
 <body>
     <header>
-        <div class="logo">hatchat - 1.0.0.7</div>
+        <div class="logo">hatchat - 1.0.1.0</div>
         <nav>
             <ul>
                 <li><a href="clips.html">clips</a></li>
@@ -197,14 +198,41 @@
             confirmNoBtn.onclick  = () => { confirmModal.style.display = 'none'; };
         }
 
-        profileForm.addEventListener('submit', (e) => {
+        const SERVER = 'https://averrgy-github-io.onrender.com';
+
+        profileForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const u = usernameInput.value.trim();
             if (!u)          { showError('Username cannot be empty'); return; }
             if (u.length > 8){ showError('Username must be 8 characters or less'); return; }
-            localStorage.setItem('chat_username', u);
-            localStorage.setItem('chat_color', colorInput.value);
-            showSuccess('Profile updated successfully');
+
+            const token = localStorage.getItem('hc_token');
+            const color = colorInput.value;
+
+            // Always update localStorage
+            localStorage.setItem('chat_color', color);
+
+            // If logged in, persist to server so clips and chat update everywhere
+            if (token) {
+                try {
+                    const r = await fetch(`${SERVER}/api/update-profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token, color })
+                    });
+                    const d = await r.json();
+                    if (!d.success) { showError(d.message || 'Server error saving profile'); return; }
+                    // Update stored username/color from server truth
+                    localStorage.setItem('chat_username', d.username);
+                    localStorage.setItem('chat_color', d.color);
+                    showSuccess('Profile saved — color updated everywhere!');
+                } catch(err) {
+                    showError('Could not reach server: ' + err.message);
+                    return;
+                }
+            } else {
+                showSuccess('Profile updated locally (log in to sync everywhere)');
+            }
         });
 
         resetProfileBtn.addEventListener('click', () => {

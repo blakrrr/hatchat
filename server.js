@@ -128,6 +128,9 @@ app.post('/upload-clip', (req, res) => {
             });
 
             file.buffer = null; // free RAM immediately
+            // Broadcast clip upload notification to all connected clients
+            io.emit('clip_uploaded', { uploader, filename: file.originalname });
+
             res.json({
                 success:   true,
                 filename:  file.originalname,
@@ -354,6 +357,24 @@ app.post('/api/login', async (req, res) => {
     saveRegisteredUsers();
 
     res.json({ success: true, token, username: user.username, color: user.color });
+});
+
+// POST /api/update-profile — change username color (and optionally username display) for logged-in user
+app.post('/api/update-profile', async (req, res) => {
+    const { token, color, username: newDisplay } = req.body || {};
+    if (!token) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    const user = Object.values(registeredUsers).find(u => u.sessionTokens?.includes(token));
+    if (!user) return res.status(401).json({ success: false, message: 'Invalid session' });
+
+    if (color) user.color = color;
+    saveRegisteredUsers();
+
+    // Broadcast color change to all connected sockets
+    userColors[user.username] = user.color;
+    saveUserColors();
+    io.emit('update_colors', { userColors });
+
+    res.json({ success: true, username: user.username, color: user.color });
 });
 
 // GET /api/me?token=xxx ΓÇö validate a stored session token

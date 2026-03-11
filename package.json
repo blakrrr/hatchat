@@ -1,6 +1,6 @@
 {
   "name": "hatchat",
-  "version": "1.0.0.7",
+  "version": "1.0.1.0",
   "description": "Real-time chat application with message persistence",
   "main": "server.js",
   "scripts": {

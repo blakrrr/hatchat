@@ -9,11 +9,12 @@
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
+<script src="hatchat-shared.js"></script>
 </head>
 <body class="clips-page">
 
 <header>
-  <div class="logo">hatchat - 1.0.0.7</div>
+  <div class="logo">hatchat - 1.0.1.0</div>
   <nav>
     <ul>
       <li><a href="clips.html">clips</a></li>
@@ -32,9 +33,9 @@
   <div class="clips-theater" id="clips-theater" style="display:none">
     <video class="theater-video" id="theater-video" preload="metadata"></video>
     <div class="theater-controls">
-      <div class="tc-trim-wrap" title="Preview start offset from end">
+      <div class="tc-trim-wrap" title="Preview start: 15 · 20 · 30 · 45 · 60s">
         <span class="tc-trim-label">trim</span>
-        <input type="range" class="tc-trim" id="tc-trim" min="0" max="5" step="1" value="5">
+        <input type="range" class="tc-trim" id="tc-trim" min="0" max="4" step="1" value="4">
         <span class="tc-trim-val" id="tc-trim-val">60s</span>
       </div>
       <button class="tc-btn" id="tc-prev">⏮</button>
@@ -90,10 +91,22 @@ let activeTab = 'all', trimSecs = 60;
 const USER_PALETTE = ['#7c6af7','#e8724a','#4ab8e8','#6fcf6f','#e8d44a','#e84a8f','#4ae8b8','#e8a44a'];
 const userColorMap = {};
 let paletteIdx = 0;
+
+async function fetchAndCacheUserColors() {
+  try {
+    const r = await fetch(`${SERVER}/api/all-users`);
+    const d = await r.json();
+    if (d.success) {
+      d.users.forEach(u => { if (u.color) userColorMap[u.username.toLowerCase()] = u.color; });
+    }
+  } catch(e) { /* fall back to palette */ }
+}
+
 function getUserColor(u) {
   if (!u || u === 'unknown') return '#666';
-  if (!userColorMap[u]) userColorMap[u] = USER_PALETTE[paletteIdx++ % USER_PALETTE.length];
-  return userColorMap[u];
+  const key = u.toLowerCase();
+  if (!userColorMap[key]) userColorMap[key] = USER_PALETTE[paletteIdx++ % USER_PALETTE.length];
+  return userColorMap[key];
 }
 
 // ── Cloudinary poster thumbnail ──────────────────────────────────────────
@@ -149,6 +162,30 @@ function renderGrid(container, clips, showUploader) {
       uEl.style.color = getUserColor(clip.uploader);
       info.appendChild(uEl);
     }
+    // Delete button — only for the clip's owner
+    if (username && clip.uploader && clip.uploader.toLowerCase() === username.toLowerCase()) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'clip-delete-btn';
+      delBtn.textContent = '🗑 delete';
+      delBtn.title = 'Delete this clip';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${clip.filename.replace(/\.[^.]+$/, '')}"?`)) return;
+        delBtn.disabled = true;
+        delBtn.textContent = 'deleting…';
+        try {
+          const r = await fetch(`${SERVER}/api/clips/${encodeURIComponent(clip.public_id)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploader: username })
+          });
+          const d = await r.json();
+          if (d.success) { card.remove(); showStatus('clip deleted', 'success'); }
+          else { showStatus(d.message || 'delete failed', 'error'); delBtn.disabled = false; delBtn.textContent = '🗑 delete'; }
+        } catch(err) { showStatus('delete error: ' + err.message, 'error'); delBtn.disabled = false; delBtn.textContent = '🗑 delete'; }
+      });
+      info.appendChild(delBtn);
+    }
     card.appendChild(info);
     container.appendChild(card);
   });
@@ -158,6 +195,7 @@ function renderGrid(container, clips, showUploader) {
 async function loadClips() {
   const grid = document.getElementById('clips-grid-all');
   grid.innerHTML = '<div class="clips-empty">loading clips...</div>';
+  await fetchAndCacheUserColors();
   try {
     const res  = await fetch(`${SERVER}/api/clips`);
     const data = await res.json();
@@ -229,9 +267,11 @@ function fmtTime(s) {
   return `${m}:${ss.toString().padStart(2, '0')}`;
 }
 
-// Trim slider: value 5 = 60s, each step = 12s
+// Trim slider: 5 positions → 15, 20, 30, 45, 60s
+const TRIM_STEPS = [15, 20, 30, 45, 60];
 tcTrim.addEventListener('input', () => {
-  trimSecs = parseInt(tcTrim.value) * 12;
+  const idx = Math.min(parseInt(tcTrim.value), TRIM_STEPS.length - 1);
+  trimSecs = TRIM_STEPS[idx];
   tcTrimVal.textContent = trimSecs + 's';
 });
 
@@ -408,6 +448,10 @@ submitBtn.addEventListener('click', async () => {
   progressLbl.textContent = failed
     ? `done — ${done - failed}/${done} succeeded`
     : `done! reloading…`;
+
+  if (!failed && window.hcNotify) {
+    window.hcNotify(`📎 ${uploader} uploaded ${done} clip${done !== 1 ? 's' : ''}`);
+  }
 
   pendingFiles = [];
   fileInput.value = '';

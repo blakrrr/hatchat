@@ -10,10 +10,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
+    <script src="hatchat-shared.js"></script>
 </head>
 <body>
     <header>
-        <div class="logo">hatchat - 1.0.0.7</div>
+        <div class="logo">hatchat - 1.0.1.0</div>
         <nav><ul>
             <li><a href="clips.html">clips</a></li>
             <li><a href="index.html">homepage</a></li>
@@ -291,6 +292,11 @@
 
         socket.on('chat_message', (data) => {
             displayMessage(data.username, data.message, data.timestamp, data.color, data.image, data.replyTo);
+            // Notify if message is from someone else and page is not focused
+            if (data.username !== username && window.hcNotify) {
+                const preview = data.message ? data.message.substring(0, 50) : '[image]';
+                window.hcNotify(`💬 ${data.username}: ${preview}`);
+            }
         });
         socket.on('scroll_to_latest', () => { chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; });
 
