@@ -1,48 +1,106 @@
-// Already includes Express, Socket.IO, Cloudinary, multer, fs, bcrypt
-// Keep your existing users & chat logic intact
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const fsExtra = require('fs-extra');
+const { v2: cloudinary } = require('cloudinary');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const httpsModule = require('https');
 
-// ── Clip upload (Cloudinary) ──
-app.post('/upload-clip', multer({ storage: multer.memoryStorage() }).single('clip'), async (req,res)=>{
-  const file = req.file;
-  const uploader = (req.body.uploader||'unknown').trim();
-  if(!file) return res.status(400).json({success:false,message:'No file uploaded'});
-  try{
-    const baseName = file.originalname.replace(/\.[^.]+$/,'');
-    const result = await new Promise((resolve,reject)=>{
-      const stream = cloudinary.uploader.upload_stream({
-        resource_type:'video', folder:'hatchat-clips', public_id:baseName, overwrite:false,
-        tags:[`uploader:${uploader}`], context:`uploader=${uploader}`
-      }, (err,r)=>err?reject(err):resolve(r));
-      stream.end(file.buffer);
+// ─── Cloudinary config ─────────────────────────────────────────────────────
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key:    process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname)));
+
+const server = http.createServer(app);
+const io = socketIo(server, {
+    cors: {
+        origin: ["https://hatchat.blakrr.works", "http://hatchat.blakrr.works",
+                 "https://averrgy-github-io.onrender.com", "*"],
+        methods: ["GET", "POST"]
+    }
+});
+
+// ─── GITHUB PERSISTENCE FOR users.json ────────────────────────────────────
+// Render's free tier has ephemeral storage — every restart wipes the disk.
+// To survive restarts, we read users.json FROM GitHub on boot, and push it
+// back TO GitHub every time an account is created or logged into.
+// You need a GITHUB_TOKEN env var on Render (a personal access token with
+// repo write access). Without it the server still works — accounts just
+// won't persist across restarts (degraded mode).
+
+const GITHUB_TOKEN  = process.env.GITHUB_TOKEN;
+const GITHUB_REPO   = 'blakrrr/hatchat';
+const GITHUB_BRANCH = 'main';
+const GITHUB_PATH   = 'users.json';
+
+let githubUsersSha = null; // tracks the SHA of the current users.json on GitHub
+
+function githubRequest(method, urlPath, body) {
+    return new Promise((resolve, reject) => {
+        const payload = body ? JSON.stringify(body) : null;
+        const options = {
+            hostname: 'api.github.com',
+            path: urlPath,
+            method,
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'hatchat-server',
+                ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {})
+            }
+        };
+        const req = httpsModule.request(options, res => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+                catch(e) { resolve({ status: res.statusCode, body: data }); }
+            });
+        });
+        req.on('error', reject);
+        if (payload) req.write(payload);
+        req.end();
     });
-    res.json({ success:true, filename:file.originalname, url:result.secure_url, public_id:result.public_id, uploader });
-  }catch(e){ console.error(e); res.status(500).json({success:false,message:e.message}); }
-});
+}
 
-// GET /api/clips
-app.get('/api/clips', async (req,res)=>{
-  try{
-    const result = await cloudinary.api.resources({ resource_type:'video', type:'upload', prefix:'hatchat-clips/', max_results:200, context:true, tags:true });
-    const clips = result.resources.map(r=>{
-      let uploader='unknown';
-      if(r.context?.custom?.uploader) uploader=r.context.custom.uploader;
-      else if(r.tags) { const t=r.tags.find(t=>t.startsWith('uploader:')); if(t) uploader=t.replace('uploader:',''); }
-      return { filename:path.basename(r.public_id)+'.'+r.format, url:r.secure_url, public_id:r.public_id, created_at:r.created_at, uploader };
-    });
-    clips.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    res.json({ success:true, clips });
-  }catch(e){ console.error(e); res.status(500).json({success:false,message:e.message}); }
-});
+async function fetchUsersFromGitHub() {
+    if (!GITHUB_TOKEN) return null;
+    try {
+        const res = await githubRequest('GET', `/repos/${GITHUB_REPO}/contents/${GITHUB_PATH}?ref=${GITHUB_BRANCH}`);
+        if (res.status !== 200) return null;
+        githubUsersSha = res.body.sha;
+        const content = Buffer.from(res.body.content, 'base64').toString('utf8');
+        console.log('[GitHub] Loaded users.json from GitHub (SHA:', githubUsersSha, ')');
+        return JSON.parse(content);
+    } catch(e) { console.error('[GitHub] Failed to fetch users.json:', e.message); return null; }
+}
 
-// DELETE /api/clips/:public_id
-app.delete('/api/clips/:public_id(*)', async (req,res)=>{
-  const { public_id } = req.params; const { uploader } = req.body||{};
-  if(!uploader) return res.status(400).json({success:false,message:'Missing uploader'});
-  try{
-    const info = await cloudinary.api.resource(public_id, { resource_type:'video', context:true, tags:true });
-    let owner = info.context?.custom?.uploader || (info.tags?.find(t=>t.startsWith('uploader:'))?.replace('uploader:','')) || 'unknown';
-    if(owner.toLowerCase()!==uploader.toLowerCase()) return res.status(403).json({success:false,message:'Can only delete your own clips'});
-    await cloudinary.uploader.destroy(public_id,{ resource_type:'video' });
-    res.json({success:true});
-  }catch(e){ console.error(e); res.status(500).json({success:false,message:e.message}); }
-});
+async function pushUsersToGitHub(usersData) {
+    if (!GITHUB_TOKEN) return;
+    try {
+        const content = Buffer.from(JSON.stringify(usersData, null, 2)).toString('base64');
+        const body = { message: 'chore: update users [skip ci]', content, branch: GITHUB_BRANCH };
+        if (githubUsersSha) body.sha = githubUsersSha;
+        const res = await githubRequest('PUT', `/repos/${GITHUB_REPO}/contents/${GITHUB_PATH}`, body);
+        if (res.status === 200 || res.status === 201) {
+            githubUsersSha = res.body.content?.sha || githubUsersSha;
+            console.log('[GitHub] Pushed users.json to GitHub');
+        } else {
+            console.error('[GitHub] Push failed:', res.status, JSON.stringify(res.body).substring(0, 200));
+        }
+    } catch(e) { console.error('[GitHub] Push error:', e.message); }
+}
