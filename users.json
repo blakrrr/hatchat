@@ -6,5 +6,13 @@
     "sessionTokens": [
       "6f58dbbd27783a291f317c1ad6b65ba8463573ec2f28367336d2f26260ccb890"
     ]
+  },
+  "blaker": {
+    "username": "blaker",
+    "passwordHash": "$2a$10$s6H4hqEu.7i7K/Pt6k7iiOhpiD0nIHo09DCu2jr.2FImZ4uobV2QG",
+    "color": "#ff0000",
+    "sessionTokens": [
+      "39ad88bda1693723716d4d554c7a35d8cbf01f3c3733fcbf6be17166617254e1"
+    ]
   }
 }
