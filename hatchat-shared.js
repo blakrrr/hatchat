@@ -90,14 +90,9 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
             if (userList) userList.style.zoom = zoom / 100;
         }
 
-        // Clips page: set column count on ALL month grids + the flat grids
+        // Clips page: cols = zoom/10 (10%=1, 20%=2, 100%=10, etc.)
         if (isClips) {
-            let cols = 3;
-            if      (zoom < 50)  cols = 7;
-            else if (zoom < 80)  cols = 5;
-            else if (zoom < 120) cols = 3;
-            else if (zoom < 160) cols = 2;
-            else                 cols = 1;
+            const cols = Math.max(1, Math.round(zoom / 10));
             const colStr = `repeat(${cols}, 1fr)`;
             // Flat grids (used by renderGrid)
             const ga = document.getElementById('clips-grid-all');

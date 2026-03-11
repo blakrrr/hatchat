@@ -736,9 +736,7 @@ body.clips-page {
 /* Direct grid containers used by JS */
 #clips-grid-all,
 #clips-grid-user {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
+    display: block;
     padding: 0.75rem 0;
 }
 
