@@ -528,6 +528,15 @@ function showStatus(msg, type) {
   statusEl.className = `clips-status-msg ${type}`;
   setTimeout(() => { statusEl.className = 'clips-status-msg'; statusEl.textContent = ''; }, 4000);
 }
+// ── Theater shrink on scroll ─────────────────────────────────────────────
+(function() {
+  const vid = document.getElementById('theater-video');
+  window.addEventListener('scroll', () => {
+    if (!vid) return;
+    const scrolled = window.scrollY > 80;
+    vid.style.maxHeight = scrolled ? '28vh' : '65vh';
+  }, { passive: true });
+})();
 </script>
 </body>
 </html>

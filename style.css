@@ -17,6 +17,9 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .logo {
@@ -586,6 +589,7 @@ body.clips-page {
     background: #000;
     object-fit: contain;
     cursor: pointer;
+    transition: max-height 0.18s ease;
 }
 
 .theater-controls {
