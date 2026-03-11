@@ -4,7 +4,11 @@
     "passwordHash": "$2a$10$U1nUGTSO5.TETAReDRdEceXoJ0K6Iu4B3SJ739C9rM5WDsliA24ZG",
     "color": "#8b7bcc",
     "sessionTokens": [
-      "6f58dbbd27783a291f317c1ad6b65ba8463573ec2f28367336d2f26260ccb890"
+      "de895d85e0c3b0613e553cdfe770ac9fea696e756e1ef662aae8867656bad433",
+      "97811156f39fa83963351d662827171231b795f3b162f01960acbc269126a005",
+      "bfe3097498314c90ce2f60993877971f3868d1dc67a08a262e8fc37d6674d116",
+      "1c44d74a83069b2d3931a9e5ed110677ca28255f041739ce108320792cb50168",
+      "acceb108c6c264c3cb64a05bdd0fb8b842472424cf8d3740cfb64532ef12ba1f"
     ]
   },
   "blaker": {
@@ -12,7 +16,17 @@
     "passwordHash": "$2a$10$s6H4hqEu.7i7K/Pt6k7iiOhpiD0nIHo09DCu2jr.2FImZ4uobV2QG",
     "color": "#ff0000",
     "sessionTokens": [
-      "39ad88bda1693723716d4d554c7a35d8cbf01f3c3733fcbf6be17166617254e1"
+      "39ad88bda1693723716d4d554c7a35d8cbf01f3c3733fcbf6be17166617254e1",
+      "1eb129eab4c3c87b337b9ed0a0161aee81bb47155f9e66c27aba48202d4d6561",
+      "17f2c4e142ff5bf3a755a4c78ee7de3955335d77a412b3bb794dee7bbda691e6"
+    ]
+  },
+  "vixian": {
+    "username": "Vixian",
+    "passwordHash": "$2a$10$yWQEiGPv0cHLYQRGldc/..mTX605jmU9IQrsqyTSlIRiZ6pgk6oA2",
+    "color": "#ff06ff",
+    "sessionTokens": [
+      "9169cf0bb6ccfad97148c5a22e46853ec9188bef869ab2b0ca5c013c95ac34e6"
     ]
   }
 }
