@@ -4,11 +4,11 @@
     "passwordHash": "$2a$10$U1nUGTSO5.TETAReDRdEceXoJ0K6Iu4B3SJ739C9rM5WDsliA24ZG",
     "color": "#8e82c9",
     "sessionTokens": [
-      "1c44d74a83069b2d3931a9e5ed110677ca28255f041739ce108320792cb50168",
-      "acceb108c6c264c3cb64a05bdd0fb8b842472424cf8d3740cfb64532ef12ba1f",
       "9658bf4b0ce4aa1e295ca7e0d17444a0d660948bbf99122c1479f1fee664debd",
       "df03d1ae9314b905972c7e68e592f22c918392fb7abf052c25cfc51efb07a6da",
-      "a3b8c40675b09a4b728c5f1af332347db7204b4610614a0c0e4df63c57eca9d2"
+      "a3b8c40675b09a4b728c5f1af332347db7204b4610614a0c0e4df63c57eca9d2",
+      "f19a6fa3c55c82473d56b3fa81dd073ae16aceb698e380a470e7b71a13da4288",
+      "80339435cd4ede924e548d710f50c6b1e6cf12daa596686217144be3220af6fa"
     ]
   },
   "blaker": {
