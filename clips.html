@@ -10,6 +10,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <script src="hatchat-shared.js"></script>
+<style>
+  /* Online panel coexists with clips — panel is on the right, clips flow left */
+  body.has-online-panel .clips-main { margin-right: 164px; }
+  /* Theater FS: panel slides away so video gets full width */
+  body.has-online-panel .theater-fs ~ #hc-online-panel,
+  .theater-fs + #hc-online-panel,
+  body.has-online-panel:has(.theater-fs) #hc-online-panel { display: none; }
+  /* Non-FS theater: panel stays but theater respects the margin */
+  body.has-online-panel .clips-theater:not(.theater-fs) { margin-right: 0; }
+</style>
 </head>
 <body class="clips-page">
 
@@ -279,6 +289,8 @@ loadClips();
 // ── Socket: live notifications for new clips & color updates ─────────────
 (function() {
   const sock = io(SERVER, { query: { username: username || 'clips-viewer', color: '#000' }, reconnection: true });
+  // Init the shared online panel
+  if (window.hcInitOnlinePanel) window.hcInitOnlinePanel(sock);
   // NOTE: force_reload removed here — it was interrupting batch uploads.
   // The upload handler triggers its own reload after all files complete.
   sock.on('clip_uploaded', (data) => {
@@ -537,11 +549,12 @@ function showStatus(msg, type) {
   function enterFS() {
     if (!theater || theater.style.display === 'none') return;
     isFS = true;
-    // Instant scroll to top, then animate the theater expanding
     window.scrollTo({ top: 0, behavior: 'instant' });
     theater.classList.add('theater-fs');
     document.body.style.overflow = 'hidden';
-    // Start from current height, then in next frame expand — triggers CSS transition
+    // Hide online panel so theater gets full width
+    const panel = document.getElementById('hc-online-panel');
+    if (panel) panel.style.display = 'none';
     vid.style.maxHeight = window.scrollY > 80 ? '28vh' : '65vh';
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -555,6 +568,9 @@ function showStatus(msg, type) {
     isFS = false;
     theater.classList.remove('theater-fs');
     document.body.style.overflow = '';
+    // Restore online panel
+    const panel = document.getElementById('hc-online-panel');
+    if (panel) panel.style.display = '';
     vid.style.maxHeight = '65vh';
     if (fsBtn) fsBtn.textContent = '⛶';
   }

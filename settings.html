@@ -84,7 +84,7 @@
         @media (max-width: 768px) { .main-content { padding: 1rem; } }
     </style>
 </head>
-<body>
+<body class="settings-page">
     <header>
         <div class="logo">hatchat - 1.0.3.0</div>
         <nav>
@@ -151,6 +151,16 @@
         <p>&copy; 2025 hatchat. All rights reserved.</p>
     </footer>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Minimal socket for online panel + cross-page sound
+        (function() {
+            const u = localStorage.getItem('chat_username') || 'settings-viewer';
+            const c = localStorage.getItem('chat_color') || '#888';
+            const sock = io(SERVER, { query: { username: u, color: c }, reconnection: true });
+            if (window.hcInitOnlinePanel) window.hcInitOnlinePanel(sock);
+        })();
+    </script>
     <script>
         const profileForm       = document.getElementById('profile-form');
         const usernameInput     = document.getElementById('username');

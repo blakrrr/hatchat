@@ -193,7 +193,117 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
     window.hcIsDnd = isDnd;
 })();
 
-// ── Shared CSS ────────────────────────────────────────────────────────────
+// ── Online Users Panel (shared across pages) ──────────────────────────────
+// Call window.hcInitOnlinePanel(socketInstance) after connecting a socket.
+// Injects a fixed sidebar panel showing online/offline users.
+(function initOnlinePanelStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        #hc-online-panel {
+            position: fixed; top: 3.5rem; right: 0;
+            width: 160px; height: calc(100vh - 3.5rem);
+            background: #0d0d0d; border-left: 1px solid #1e1e1e;
+            overflow-y: auto; z-index: 100; padding: 0.6rem 0.5rem;
+            box-sizing: border-box; font-family: 'DejaVu Sans Mono', monospace;
+            font-size: 0.75rem;
+        }
+        #hc-online-panel h4 {
+            color: #555; font-size: 0.65rem; text-transform: uppercase;
+            letter-spacing: 0.05em; margin: 0 0 0.5rem 0.2rem;
+        }
+        #hc-online-panel .user-item {
+            display: flex; align-items: center; padding: 0.18rem 0.2rem;
+            gap: 0.35rem;
+        }
+        #hc-online-panel .user-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #4CAF50; flex-shrink: 0;
+        }
+        #hc-online-panel .user-dot-offline { background: #333; }
+        #hc-online-panel .offline-divider {
+            color: #333; font-size: 0.6rem; margin: 0.4rem 0;
+            text-align: center;
+        }
+        /* push page content left to make room on non-chat pages */
+        body.has-online-panel .clips-main,
+        body.has-online-panel .main-content {
+            margin-right: 164px;
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
+window.hcInitOnlinePanel = function(sock) {
+    const panel = document.createElement('div');
+    panel.id = 'hc-online-panel';
+    panel.innerHTML = '<h4>hattingtons</h4><div id="hc-online-list"></div>';
+    document.body.appendChild(panel);
+    document.body.classList.add('has-online-panel');
+
+    async function refresh() {
+        try {
+            const r = await fetch(`${SERVER}/api/all-users`);
+            const d = await r.json();
+            if (!d.success) return;
+            const list = document.getElementById('hc-online-list');
+            if (!list) return;
+            list.innerHTML = '';
+            const online  = d.users.filter(u => u.online);
+            const offline = d.users.filter(u => !u.online);
+            online.forEach(u => {
+                const item = document.createElement('div'); item.className = 'user-item';
+                const dot = document.createElement('span'); dot.className = 'user-dot';
+                const lbl = document.createElement('span'); lbl.textContent = u.username;
+                lbl.style.color = u.color || '#e0e0e0';
+                item.appendChild(dot); item.appendChild(lbl); list.appendChild(item);
+            });
+            if (offline.length) {
+                const div = document.createElement('div'); div.className = 'offline-divider';
+                div.textContent = '── offline ──'; list.appendChild(div);
+                offline.forEach(u => {
+                    const item = document.createElement('div'); item.className = 'user-item';
+                    const dot = document.createElement('span'); dot.className = 'user-dot user-dot-offline';
+                    const lbl = document.createElement('span'); lbl.textContent = u.username;
+                    lbl.style.color = '#555';
+                    item.appendChild(dot); item.appendChild(lbl); list.appendChild(item);
+                });
+            }
+        } catch(_) {}
+    }
+
+    refresh();
+    sock.on('refresh_all_users', refresh);
+    sock.on('update_users', refresh);
+    sock.on('user_join',  refresh);
+    sock.on('user_leave', refresh);
+};
+
+// ── Cross-page notification sound ─────────────────────────────────────────
+// Plays the notif sound when a chat_message arrives via localStorage storage event
+(function initCrossPageSound() {
+    const SOUND_KEY = 'hc_last_chat_msg';
+    const notifSound = new Audio('/public/sounds/notif.mp3');
+    notifSound.onerror = () => { notifSound.src = '/public/sounds/notif.wav'; };
+
+    function isDnd() { return localStorage.getItem('hc_dnd') === 'true'; }
+
+    window.addEventListener('storage', (e) => {
+        if (e.key !== SOUND_KEY || !e.newValue) return;
+        if (isDnd()) return;
+        try { notifSound.currentTime = 0; notifSound.play().catch(() => {}); } catch(_) {}
+        // Also show the notification popup on this page
+        try {
+            const payload = JSON.parse(e.newValue);
+            if (payload.msg && window.hcNotify) window.hcNotify(payload.msg);
+        } catch(_) {}
+    });
+
+    // Chat page calls this when it receives a message from another user
+    window.hcTriggerCrossPageSound = function(msg) {
+        localStorage.setItem(SOUND_KEY, JSON.stringify({ msg: msg || '💬 new message', t: Date.now() }));
+        setTimeout(() => localStorage.removeItem(SOUND_KEY), 200);
+    };
+})();
 (function injectSharedStyles() {
     const style = document.createElement('style');
     style.textContent = `

@@ -444,6 +444,8 @@
                     const preview = data.message ? data.message.substring(0, 50) : '[image]';
                     if (window.hcNotify) window.hcNotify(`💬 ${data.username}: ${preview}`);
                     playNotifSound();
+                    // Ping other tabs (clips, settings) so they play sound + show popup too
+                    if (window.hcTriggerCrossPageSound) window.hcTriggerCrossPageSound(`💬 ${data.username}: ${preview}`);
                 }
             }
         });

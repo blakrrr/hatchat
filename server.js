@@ -71,7 +71,8 @@ app.post('/upload', imageUpload.single('image'), (req, res) => {
 // The original filename is preserved as the public_id so NVIDIA date-names sort correctly.
 
 // NVIDIA filename pattern: "Game Name YYYY.MM.DD - HH.MM.SS.frames.ext"
-const NVIDIA_PATTERN = /\d{4}\.\d{2}\.\d{2}\s*-\s*\d{2}\.\d{2}\.\d{2}/;
+// Also accepts dashes as date separators: YYYY-MM-DD or YYYY.MM.DD
+const NVIDIA_PATTERN = /\d{4}[.\-]\d{2}[.\-]\d{2}\s*[-_]\s*\d{2}[.\-]\d{2}[.\-]\d{2}/;
 
 // No size limit on multer ΓÇö Cloudinary accepts any size and we compress on their end.
 // We buffer each file in memory one at a time via the streaming uploader.
@@ -327,28 +328,32 @@ async function loadUsersFromCloudinary() {
 }
 
 let _userSyncTimer = null;
-function saveRegisteredUsers() {
-    // Write local immediately
-    try { fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2), 'utf8'); }
+function saveRegisteredUsers(immediate = false) {
+    const json = JSON.stringify(registeredUsers, null, 2);
+    try { fs.writeFileSync(USERS_FILE, json, 'utf8'); }
     catch (e) { console.error('Error saving users locally:', e); }
-    // Debounce Cloudinary upload — no GitHub commits, no Render restarts
     clearTimeout(_userSyncTimer);
-    _userSyncTimer = setTimeout(() => saveUsersToCloudinary(), 5000);
+    if (immediate) {
+        // Fire and log — don't block the response but do log any failure
+        saveUsersToCloudinary().catch(e => console.error('Immediate user save failed:', e));
+    } else {
+        _userSyncTimer = setTimeout(() => saveUsersToCloudinary(), 5000);
+    }
 }
 
 async function saveUsersToCloudinary() {
     try {
         const json = JSON.stringify(registeredUsers, null, 2);
-        await new Promise((resolve, reject) => {
+        const result = await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
                 { resource_type: 'raw', public_id: CLOUDINARY_USERS_PUBLIC_ID, overwrite: true, invalidate: true },
                 (err, result) => err ? reject(err) : resolve(result)
             );
             stream.end(Buffer.from(json, 'utf8'));
         });
-        console.log(`Users saved to Cloudinary (${Object.keys(registeredUsers).length} total)`);
+        console.log(`Users saved to Cloudinary (${Object.keys(registeredUsers).length} total) — public_id: ${result.public_id}`);
     } catch (e) {
-        console.error('Cloudinary user save error:', e.message);
+        console.error('Cloudinary user save FAILED:', e.message);
     }
 }
 
@@ -367,7 +372,15 @@ app.post('/api/register', async (req, res) => {
         color: color || '#FFFFFF',
         sessionTokens: [token],
     };
-    saveRegisteredUsers();
+
+    // Save immediately and wait — if Cloudinary fails, the account would be lost on Render restart
+    try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2), 'utf8');
+        await saveUsersToCloudinary();
+    } catch (e) {
+        console.error('CRITICAL: Failed to persist new user to Cloudinary:', e.message);
+        // Don't block the registration — local save worked, Cloudinary will retry
+    }
 
     res.json({ success: true, token, username, color: color || '#FFFFFF' });
 });
@@ -384,7 +397,11 @@ app.post('/api/login', async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex');
     user.sessionTokens = (user.sessionTokens || []).slice(-4); // keep last 5
     user.sessionTokens.push(token);
-    saveRegisteredUsers();
+    // Save immediately — session tokens need to survive Render restarts
+    try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2), 'utf8');
+        saveUsersToCloudinary().catch(e => console.error('Login token save to Cloudinary failed:', e.message));
+    } catch (e) { console.error('Login local save error:', e); }
 
     res.json({ success: true, token, username: user.username, color: user.color });
 });
@@ -520,15 +537,14 @@ try {
     }
 } catch (e) { console.error('Error loading user colors:', e); }
 
-// Debounce saves — write local immediately, push to Cloudinary every 20s max
+// Debounce saves — write local immediately, push to Cloudinary after 5s of inactivity
 let _msgSyncTimer = null;
 function saveMessages() {
     const json = JSON.stringify(chatMessages);
-    // Write local immediately (fast, survives short restarts)
     try { fs.writeFileSync(MESSAGES_FILE, json, 'utf8'); } catch (e) { console.error('Local msg save error:', e); }
-    // Debounce Cloudinary upload
     clearTimeout(_msgSyncTimer);
-    _msgSyncTimer = setTimeout(() => saveMessagesToCloudinary(), 20000);
+    // Push to Cloudinary after 2s of inactivity (reduced from 5s to survive Render restarts)
+    _msgSyncTimer = setTimeout(() => saveMessagesToCloudinary(), 2000);
 }
 
 async function saveMessagesToCloudinary() {
@@ -578,11 +594,9 @@ io.on('connection', (socket) => {
         userConnectionCount[uname] = prev + 1;
 
         if (prev === 0) {
-            // Truly new arrival — announce and log it
+            // Truly new arrival — broadcast join event but do NOT save to message history
+            // (join/leave messages were accumulating and bloating/displacing real messages)
             const ts = new Date().toISOString();
-            const sysMsg = { type: 'system', message: `${uname} has joined the chat`, timestamp: ts };
-            chatMessages.push(sysMsg);
-            saveMessages();
             io.emit('user_join', { username: uname, users: Object.values(users), userColors, timestamp: ts });
         } else {
             // Just navigating between pages — silently refresh user list
@@ -603,6 +617,15 @@ io.on('connection', (socket) => {
             replyTo: data.replyTo || null
         };
         chatMessages.push(messageData);
+        // Hard cap: keep last 2000 real messages.
+        // Also purge system messages older than 7 days — join/leave spam bloats the
+        // store and was displacing real messages on every reload.
+        const _realMsgs = chatMessages.filter(m => m.type === 'message');
+        if (_realMsgs.length > 2000) {
+            chatMessages = chatMessages.filter(m => m.type !== 'message').concat(_realMsgs.slice(-2000));
+        }
+        const _cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        chatMessages = chatMessages.filter(m => m.type !== 'system' || new Date(m.timestamp).getTime() > _cutoff);
         saveMessages();
         io.emit('chat_message', messageData);
     });
@@ -665,10 +688,8 @@ io.on('connection', (socket) => {
         const next = prev - 1;
         if (next <= 0) {
             delete userConnectionCount[username];
-            // Truly gone — announce leave
+            // Truly gone — broadcast leave but do NOT save to message history
             const ts = new Date().toISOString();
-            chatMessages.push({ type: 'system', message: `${username} has left the chat`, timestamp: ts });
-            saveMessages();
             io.emit('user_leave', { username, users: Object.values(users), userColors, timestamp: ts });
             io.emit('refresh_all_users');
             if (voiceMembers[snapSocketId]) {
@@ -715,6 +736,16 @@ const PORT = process.env.PORT || 3000;
 (async () => {
     try { await loadMessagesFromCloudinary(); } catch (e) { console.error('Boot message load failed:', e); }
     try { await loadUsersFromCloudinary(); } catch (e) { console.error('Boot user load failed:', e); }
+
+    // One-time cleanup: strip ALL system messages from history.
+    // They were being saved by old code and are now pure spam that displaces real messages.
+    const beforeCount = chatMessages.length;
+    chatMessages = chatMessages.filter(m => m.type !== 'system');
+    if (chatMessages.length < beforeCount) {
+        console.log(`Cleaned ${beforeCount - chatMessages.length} system messages from history (${chatMessages.length} real messages remain)`);
+        await saveMessagesToCloudinary();
+    }
+
     server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 })();
 
