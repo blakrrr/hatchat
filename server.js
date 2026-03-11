@@ -537,3 +537,38 @@ app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'settings.h
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// ADMIN: reassign all clips to a given uploader
+// POST /api/admin/reassign  { adminKey, uploader }
+app.post('/api/admin/reassign', async (req, res) => {
+    const { adminKey, uploader } = req.body || {};
+    if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    if (!uploader) return res.status(400).json({ success: false, message: 'Missing uploader' });
+    try {
+        let updated = 0, nextCursor;
+        do {
+            const result = await cloudinary.api.resources({
+                resource_type: 'video', type: 'upload',
+                prefix: 'hatchat-clips/', max_results: 100,
+                context: true, tags: true,
+                ...(nextCursor ? { next_cursor: nextCursor } : {})
+            });
+            for (const r of result.resources) {
+                await cloudinary.uploader.explicit(r.public_id, {
+                    resource_type: 'video', type: 'upload',
+                    context: `uploader=${uploader}`,
+                    tags: [`uploader:${uploader}`]
+                });
+                updated++;
+            }
+            nextCursor = result.next_cursor;
+        } while (nextCursor);
+        res.json({ success: true, updated });
+    } catch (e) {
+        console.error('Reassign error:', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
