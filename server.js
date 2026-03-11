@@ -113,12 +113,8 @@ app.post('/upload-clip', (req, res) => {
                         folder: 'hatchat-clips',
                         public_id: baseName,
                         overwrite: false,
-                        transformation: [{
-                            start_offset: '-30',
-                            bit_rate:     '1m',
-                            quality:      'auto:low',
-                            fetch_format: 'mp4',
-                        }],
+                        // No eager transformation — upload raw, play natively.
+                        // Server-side transformations were causing slow uploads.
                         tags:    [`uploader:${uploader}`],
                         context: `uploader=${uploader}`,
                     },
@@ -433,13 +429,34 @@ app.post('/api/update-profile', async (req, res) => {
     res.json({ success: true, username: user.username, color: user.color });
 });
 
-// GET /api/me?token=xxx ΓÇö validate a stored session token
+// GET /api/me?token=xxx — validate a stored session token, returns prefs too
 app.get('/api/me', (req, res) => {
     const { token } = req.query;
     if (!token) return res.status(401).json({ success: false });
     const user = Object.values(registeredUsers).find(u => u.sessionTokens?.includes(token));
     if (!user) return res.status(401).json({ success: false });
-    res.json({ success: true, username: user.username, color: user.color });
+    res.json({
+        success: true,
+        username: user.username,
+        color: user.color,
+        zoom_chat:  user.zoom_chat  ?? 100,
+        zoom_clips: user.zoom_clips ?? 100,
+        dnd:        user.dnd        ?? false,
+    });
+});
+
+// POST /api/save-prefs — save per-user preferences (zoom, dnd, etc.)
+app.post('/api/save-prefs', (req, res) => {
+    const { token, zoom_chat, zoom_clips, dnd } = req.body || {};
+    if (!token) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    const userKey = Object.keys(registeredUsers).find(k => registeredUsers[k].sessionTokens?.includes(token));
+    if (!userKey) return res.status(401).json({ success: false, message: 'Invalid session' });
+    const user = registeredUsers[userKey];
+    if (zoom_chat  !== undefined) user.zoom_chat  = zoom_chat;
+    if (zoom_clips !== undefined) user.zoom_clips = zoom_clips;
+    if (dnd        !== undefined) user.dnd        = dnd;
+    saveRegisteredUsers();
+    res.json({ success: true });
 });
 
 // GET /api/all-users ΓÇö all registered users + online status (for the user panel)

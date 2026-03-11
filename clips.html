@@ -155,6 +155,8 @@ function renderGrid(container, clips, showUploader) {
     const grid = document.createElement('div');
     grid.className = 'clips-month-grid';
     monthMap[key].forEach(clip => buildCard(grid, clip, showUploader));
+    // Apply current zoom column count immediately after creating grid
+    if (window._hcReapplyZoom) window._hcReapplyZoom();
     section.appendChild(grid);
     container.appendChild(section);
   });
