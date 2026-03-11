@@ -389,10 +389,7 @@ tcShuf.addEventListener('click', () => {
   tcShuf.classList.toggle('active', isShuffle);
 });
 
-tcFull.addEventListener('click', () => {
-  if (document.fullscreenElement) document.exitFullscreen();
-  else tvid.requestFullscreen().catch(() => {});
-});
+// tc-full is handled by the custom FS block below — do not use browser fullscreen
 
 tcPrev.addEventListener('click', () => advanceTheater(-1));
 tcNext.addEventListener('click', () => advanceTheater(1));
@@ -538,10 +535,17 @@ function showStatus(msg, type) {
   function enterFS() {
     if (!theater || theater.style.display === 'none') return;
     isFS = true;
-    // Snap scroll to top fast
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Instant scroll to top, then animate the theater expanding
+    window.scrollTo({ top: 0, behavior: 'instant' });
     theater.classList.add('theater-fs');
     document.body.style.overflow = 'hidden';
+    // Start from current height, then in next frame expand — triggers CSS transition
+    vid.style.maxHeight = window.scrollY > 80 ? '28vh' : '65vh';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        vid.style.maxHeight = 'calc(100vh - 58px)';
+      });
+    });
     if (fsBtn) fsBtn.textContent = '✕';
   }
 
@@ -549,28 +553,21 @@ function showStatus(msg, type) {
     isFS = false;
     theater.classList.remove('theater-fs');
     document.body.style.overflow = '';
-    // Restore scroll-based size
-    const scrolled = window.scrollY > 80;
-    if (vid) vid.style.maxHeight = scrolled ? '28vh' : '65vh';
+    vid.style.maxHeight = '65vh';
     if (fsBtn) fsBtn.textContent = '⛶';
   }
 
   function toggleFS() { isFS ? exitFS() : enterFS(); }
 
-  // F key anywhere on page
   window.addEventListener('keydown', e => {
     if (e.key === 'f' || e.key === 'F') {
-      // Don't trigger if typing in an input
       if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
       toggleFS();
     }
     if (e.key === 'Escape' && isFS) exitFS();
   });
 
-  // Also wire the existing ⛶ button to our custom FS instead of browser FS
-  if (fsBtn) {
-    fsBtn.onclick = (e) => { e.stopPropagation(); toggleFS(); };
-  }
+  if (fsBtn) fsBtn.addEventListener('click', e => { e.stopPropagation(); toggleFS(); });
 })();
 
 // ── Theater shrink on scroll ─────────────────────────────────────────────
