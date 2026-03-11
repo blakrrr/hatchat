@@ -86,7 +86,6 @@
 
     <div class="load-more-container">
         <button id="search-open-btn" class="load-more-btn">🔍 Search Messages</button>
-        <button id="load-more-btn" class="load-more-btn" disabled>⬆ Load Earlier</button>
     </div>
 
     <div class="main-content">
@@ -215,7 +214,6 @@
     const onlineUsersEl    = document.getElementById('online-users');
     const connectionStatus = document.getElementById('connection-status');
     const loadingIndicator = document.getElementById('loading-indicator');
-    const loadMoreBtn      = document.getElementById('load-more-btn');
     const dndToggle        = document.getElementById('dnd-toggle');
     const replyPreview     = document.getElementById('reply-preview');
     const replyPreviewText = document.getElementById('reply-preview-text');
@@ -471,8 +469,6 @@
             msgs.forEach(el => frag.appendChild(el));
             if (currentPage === 1) { chatMessagesEl.appendChild(frag); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
             else chatMessagesEl.insertBefore(frag, chatMessagesEl.firstChild);
-            // Enable/disable load-earlier button
-            if (loadMoreBtn) loadMoreBtn.disabled = !data.hasMore;
         });
 
         socket.on('user_join',  (data) => { displaySystemMessage(`${data.username} has joined the chat`, data.timestamp); if (data.userColors) userColors = data.userColors; loadAllUsers(); });
@@ -489,12 +485,6 @@
         });
         // Hard reload when server tells us to (profile update or new clip)
         socket.on('force_reload', () => { setTimeout(() => location.reload(), 800); });
-
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', () => {
-                if (!isLoading) { currentPage++; loadMessages(currentPage); }
-            });
-        }
 
         dndToggle.addEventListener('change', () => {
             isDndEnabled = dndToggle.checked;

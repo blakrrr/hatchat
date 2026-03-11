@@ -609,18 +609,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('load_messages', (data) => {
-        const page = data.page || 1;
-        const pageSize = 50;
-        const start = Math.max(0, chatMessages.length - (page * pageSize));
-        const end   = Math.max(0, chatMessages.length - ((page - 1) * pageSize));
         socket.emit('chat_history', {
-            messages: chatMessages.slice(start, end).reverse(),
-            page,
+            messages: [...chatMessages].reverse(),
+            page: 1,
             totalMessages: chatMessages.length,
-            hasMore: start > 0,
+            hasMore: false,
             userColors
         });
-        if (page === 1) socket.emit('scroll_to_latest');
+        socket.emit('scroll_to_latest');
     });
 
     socket.on('update_color', (data) => {
