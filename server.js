@@ -103,7 +103,8 @@ app.post('/upload-clip', (req, res) => {
         if (!file) return res.status(400).json({ success: false, message: 'No file received' });
 
         const uploader = (req.body && req.body.uploader) ? req.body.uploader.trim() : 'unknown';
-        const baseName = file.originalname.replace(/\.[^.]+$/, '');
+        // Prefix with uploader name so filenames never collide between users
+        const baseName = `${uploader}/${file.originalname.replace(/\.[^.]+$/, '')}`;
 
         try {
             const uploadResult = await new Promise((resolve, reject) => {
@@ -112,7 +113,7 @@ app.post('/upload-clip', (req, res) => {
                         resource_type: 'video',
                         folder: 'hatchat-clips',
                         public_id: baseName,
-                        overwrite: false,
+                        overwrite: true,
                         // No eager transformation — upload raw, play natively.
                         // Server-side transformations were causing slow uploads.
                         tags:    [`uploader:${uploader}`],
