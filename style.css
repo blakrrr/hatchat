@@ -481,9 +481,9 @@ body.clips-page {
 
 .clips-main {
     flex: 1;
-    padding: 2rem;
-    max-width: 1200px;
-    margin: 0 auto;
+    padding: 0;
+    max-width: 100%;
+    margin: 0;
     width: 100%;
     box-sizing: border-box;
 }
@@ -491,11 +491,12 @@ body.clips-page {
 /* ── Upload area ─────────────────────────────────────────────── */
 .clips-upload-section {
     background-color: #1a1a1a;
-    border: 2px dashed #333;
-    border-radius: 8px;
-    padding: 2rem;
+    border: none;
+    border-bottom: 1px solid #2a2a2a;
+    border-radius: 0;
+    padding: 1.5rem 2rem;
     text-align: center;
-    margin-bottom: 2rem;
+    margin-bottom: 0;
     transition: border-color 0.2s;
 }
 
@@ -568,10 +569,11 @@ body.clips-page {
 .clips-theater {
     width: 100%;
     background: #000;
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
-    border: 1px solid #2a2a2a;
-    margin-bottom: 1.5rem;
+    border: none;
+    border-bottom: 1px solid #1a1a1a;
+    margin-bottom: 0;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -579,11 +581,11 @@ body.clips-page {
 
 .theater-video {
     width: 100%;
-    max-height: 55vh;
+    max-height: 65vh;
     display: block;
     background: #000;
     object-fit: contain;
-    cursor: pointer; /* click to pause/play */
+    cursor: pointer;
 }
 
 .theater-controls {
@@ -678,8 +680,10 @@ body.clips-page {
     align-items: center;
     gap: 0.4rem;
     border-bottom: 1px solid #2a2a2a;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
     flex-wrap: wrap;
+    padding: 0 1.5rem;
+    background: #111;
 }
 .clips-tab {
     padding: 0.35rem 0.85rem;
@@ -731,7 +735,9 @@ body.clips-page {
 }
 
 /* ── Clips grid ──────────────────────────────────────────────── */
-.clips-grid-section {}
+.clips-grid-section {
+    padding: 1.5rem;
+}
 
 /* Direct grid containers used by JS */
 #clips-grid-all,
@@ -781,7 +787,7 @@ body.clips-page {
 
 .clip-card {
     background-color: #1a1a1a;
-    border: 1px solid #2a2a2a;
+    border: 2px solid #2a2a2a;
     border-radius: 8px;
     overflow: hidden;
     transition: border-color 0.2s, transform 0.1s;
