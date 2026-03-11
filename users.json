@@ -4,11 +4,11 @@
     "passwordHash": "$2a$10$U1nUGTSO5.TETAReDRdEceXoJ0K6Iu4B3SJ739C9rM5WDsliA24ZG",
     "color": "#8b7bcc",
     "sessionTokens": [
-      "de895d85e0c3b0613e553cdfe770ac9fea696e756e1ef662aae8867656bad433",
       "97811156f39fa83963351d662827171231b795f3b162f01960acbc269126a005",
       "bfe3097498314c90ce2f60993877971f3868d1dc67a08a262e8fc37d6674d116",
       "1c44d74a83069b2d3931a9e5ed110677ca28255f041739ce108320792cb50168",
-      "acceb108c6c264c3cb64a05bdd0fb8b842472424cf8d3740cfb64532ef12ba1f"
+      "acceb108c6c264c3cb64a05bdd0fb8b842472424cf8d3740cfb64532ef12ba1f",
+      "9658bf4b0ce4aa1e295ca7e0d17444a0d660948bbf99122c1479f1fee664debd"
     ]
   },
   "blaker": {
@@ -26,7 +26,9 @@
     "passwordHash": "$2a$10$yWQEiGPv0cHLYQRGldc/..mTX605jmU9IQrsqyTSlIRiZ6pgk6oA2",
     "color": "#ff06ff",
     "sessionTokens": [
-      "9169cf0bb6ccfad97148c5a22e46853ec9188bef869ab2b0ca5c013c95ac34e6"
+      "9169cf0bb6ccfad97148c5a22e46853ec9188bef869ab2b0ca5c013c95ac34e6",
+      "77f3dbd287ab0a85c3c7a587c2956752277357a59be65f2bc6b37278824d06a6",
+      "25c16341f9d4397a30ba4e0ba59f88bf2bf987d3c6097c2db0055a15db50c2d4"
     ]
   }
 }
