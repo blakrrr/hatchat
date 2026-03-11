@@ -2,7 +2,7 @@
 // Caches the app shell so it loads instantly and works offline.
 // Strategy: cache-first for static assets, network-first for API calls.
 
-const CACHE = 'hatchat-v3';
+const CACHE = 'hatchat-v4'; // bumped — forces all clients to re-fetch fresh HTML/CSS
 const SHELL = [
   '/',
   '/chat.html',
