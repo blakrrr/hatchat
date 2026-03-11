@@ -7,7 +7,9 @@ const HATCHAT_VERSION = '1.0.3.0';
 
 // ── Zoom ──────────────────────────────────────────────────────────────────
 (function initZoom() {
-    const ZOOM_KEY = 'hc_zoom';
+    // Use a different localStorage key per page type so chat & clips zoom are independent
+    const isClips = document.body && document.body.classList.contains('clips-page');
+    const ZOOM_KEY = isClips ? 'hc_zoom_clips' : 'hc_zoom_chat';
     let zoom = parseFloat(localStorage.getItem(ZOOM_KEY)) || 100;
 
     function applyZoom(z) {
@@ -22,11 +24,10 @@ const HATCHAT_VERSION = '1.0.3.0';
             if (userList) userList.style.zoom = zoom / 100;
         }
 
-        // Clips page: change grid columns count (zoom controls density)
+        // Clips page: change grid column count (zoom = density)
         const clipsGridAll  = document.getElementById('clips-grid-all');
         const clipsGridUser = document.getElementById('clips-grid-user');
         if (clipsGridAll || clipsGridUser) {
-            // 10-49% = 7 cols, 50-79% = 5 cols, 80-119% = 3 cols, 120-159% = 2 cols, 160%+ = 1 col
             let cols = 3;
             if      (zoom < 50)  cols = 7;
             else if (zoom < 80)  cols = 5;
@@ -55,11 +56,10 @@ const HATCHAT_VERSION = '1.0.3.0';
     document.addEventListener('DOMContentLoaded', () => {
         applyZoom(zoom);
 
-        // Inject zoom widget into load-more-container if present, else after header
         const container = document.querySelector('.load-more-container') || null;
         const wrap = document.createElement('div');
         wrap.id = 'hc-zoom-wrap';
-        wrap.title = 'Page Zoom (Ctrl +/-)';
+        wrap.title = 'Zoom (Ctrl +/-)';
         if (!container) wrap.classList.add('hc-zoom-standalone');
         wrap.innerHTML = `<span class="hc-zoom-label">zoom</span>
             <input id="hc-zoom-slider" type="range" min="10" max="200" step="5" value="${zoom}">

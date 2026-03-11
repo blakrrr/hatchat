@@ -86,6 +86,7 @@
 
     <div class="load-more-container">
         <button id="search-open-btn" class="load-more-btn">🔍 Search Messages</button>
+        <button id="load-more-btn" class="load-more-btn" disabled>⬆ Load Earlier</button>
     </div>
 
     <div class="main-content">
@@ -214,6 +215,7 @@
     const onlineUsersEl    = document.getElementById('online-users');
     const connectionStatus = document.getElementById('connection-status');
     const loadingIndicator = document.getElementById('loading-indicator');
+    const loadMoreBtn      = document.getElementById('load-more-btn');
     const dndToggle        = document.getElementById('dnd-toggle');
     const replyPreview     = document.getElementById('reply-preview');
     const replyPreviewText = document.getElementById('reply-preview-text');
@@ -436,7 +438,7 @@
             if (currentPage === 1) chatMessagesEl.innerHTML = '';
             const msgs = [];
             data.messages.forEach((msg, i) => {
-                if (msg.type === 'system') { msgs.push(createSystemMessageElement(msg.message)); return; }
+                if (msg.type === 'system') { msgs.push(createSystemMessageElement(msg.message, msg.timestamp)); return; }
                 let isCont = false;
                 if (currentPage > 1 && i > 0 && !msg.replyTo) {
                     const prev = data.messages[i-1];
@@ -449,10 +451,12 @@
             msgs.forEach(el => frag.appendChild(el));
             if (currentPage === 1) { chatMessagesEl.appendChild(frag); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
             else chatMessagesEl.insertBefore(frag, chatMessagesEl.firstChild);
+            // Enable/disable load-earlier button
+            if (loadMoreBtn) loadMoreBtn.disabled = !data.hasMore;
         });
 
-        socket.on('user_join',  (data) => { displaySystemMessage(`${data.username} has joined the chat`); if (data.userColors) userColors = data.userColors; loadAllUsers(); });
-        socket.on('user_leave', (data) => { displaySystemMessage(`${data.username} has left the chat`);  if (data.userColors) userColors = data.userColors; loadAllUsers(); });
+        socket.on('user_join',  (data) => { displaySystemMessage(`${data.username} has joined the chat`, data.timestamp); if (data.userColors) userColors = data.userColors; loadAllUsers(); });
+        socket.on('user_leave', (data) => { displaySystemMessage(`${data.username} has left the chat`, data.timestamp);  if (data.userColors) userColors = data.userColors; loadAllUsers(); });
         socket.on('update_users',     () => loadAllUsers());
         socket.on('refresh_all_users',() => loadAllUsers());
         socket.on('update_colors', (data) => { if (data.userColors) { userColors = data.userColors; updateDisplayedColors(); } });
@@ -465,6 +469,12 @@
         });
         // Hard reload when server tells us to (profile update or new clip)
         socket.on('force_reload', () => { setTimeout(() => location.reload(), 800); });
+
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', () => {
+                if (!isLoading) { currentPage++; loadMessages(currentPage); }
+            });
+        }
 
         dndToggle.addEventListener('change', () => {
             isDndEnabled = dndToggle.checked;
@@ -589,7 +599,19 @@
         img.addEventListener('click', e => { e.stopPropagation(); window.open(src,'_blank'); });
         return img;
     }
-    function createSystemMessageElement(msg) { const div = document.createElement('div'); div.className = 'system-message'; div.textContent = msg; return div; }
+    function createSystemMessageElement(msg, timestamp) {
+        const div = document.createElement('div');
+        div.className = 'system-message';
+        div.appendChild(document.createTextNode(msg));
+        if (timestamp) {
+            const ts = document.createElement('span');
+            ts.className = 'system-ts';
+            const d = new Date(timestamp);
+            ts.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            div.appendChild(ts);
+        }
+        return div;
+    }
     function displayMessage(sender, message, timestamp, color, image=null, replyTo=null) {
         const allMsgs = chatMessagesEl.querySelectorAll('.message'); let lastDOMSender = null;
         if (allMsgs.length) { const sEl = allMsgs[allMsgs.length-1].querySelector('.message-sender'); if (sEl) lastDOMSender = sEl.getAttribute('data-sender'); }
@@ -598,7 +620,7 @@
         const el = createMessageElement(sender, message, timestamp, isCont, color, image, replyTo);
         chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
-    function displaySystemMessage(msg) { const el = createSystemMessageElement(msg); chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
+    function displaySystemMessage(msg, timestamp) { const el = createSystemMessageElement(msg, timestamp); chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
     function updateDisplayedColors() {
         document.querySelectorAll('.message').forEach(el => {
             const sEl = el.querySelector('.message-sender'); if (!sEl) return;

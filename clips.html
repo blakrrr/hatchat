@@ -14,7 +14,7 @@
 <body class="clips-page">
 
 <header>
-  <div class="logo">hatchat - 1.0.2.0</div>
+  <div class="logo">hatchat - 1.0.3.0</div>
   <nav>
     <ul>
       <li><a href="clips.html">clips</a></li>
@@ -120,16 +120,51 @@ function cloudinaryPoster(url) {
 }
 
 // ── Grid builder ─────────────────────────────────────────────────────────
+// Renders clips into `container` grouped by month (e.g. "march 2026 ───")
+// In "all" view showUploader=true; in per-user tab showUploader=false.
 function renderGrid(container, clips, showUploader) {
   container.innerHTML = '';
   if (!clips.length) { container.innerHTML = '<div class="clips-empty">no clips</div>'; return; }
 
+  // Group by month_key (YYYY-MM), preserving the already-sorted order
+  const months = [];
+  const monthMap = {};
   clips.forEach(clip => {
+    const key = clip.month_key || 'unknown';
+    if (!monthMap[key]) { monthMap[key] = []; months.push(key); }
+    monthMap[key].push(clip);
+  });
+
+  // Format month key → readable label
+  function fmtMonth(key) {
+    if (key === 'unknown') return 'unknown date';
+    const [y, m] = key.split('-');
+    const names = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    return `${names[parseInt(m,10)-1]} ${y}`;
+  }
+
+  months.forEach(key => {
+    const section = document.createElement('div');
+    section.className = 'clips-month-section';
+
+    const heading = document.createElement('h3');
+    heading.className = 'clips-month-heading';
+    heading.textContent = fmtMonth(key) + ' ───────────────';
+    section.appendChild(heading);
+
+    const grid = document.createElement('div');
+    grid.className = 'clips-month-grid';
+    monthMap[key].forEach(clip => buildCard(grid, clip, showUploader));
+    section.appendChild(grid);
+    container.appendChild(section);
+  });
+}
+
+function buildCard(grid, clip, showUploader) {
     const card = document.createElement('div');
     card.className = 'clip-card';
     card.style.borderColor = getUserColor(clip.uploader) + '44';
 
-    // Thumbnail — use a static JPEG poster from Cloudinary, no video element needed
     const thumb = document.createElement('div');
     thumb.className = 'clip-thumb';
 
@@ -143,19 +178,18 @@ function renderGrid(container, clips, showUploader) {
     const overlay = document.createElement('div');
     overlay.className = 'clip-play-overlay';
     overlay.innerHTML = '▶';
-    overlay.addEventListener('click', e => {
-      e.stopPropagation();
-      loadTheaterClip(clip);
-    });
+    overlay.addEventListener('click', e => { e.stopPropagation(); loadTheaterClip(clip); });
     thumb.appendChild(overlay);
     card.appendChild(thumb);
 
     const info = document.createElement('div');
     info.className = 'clip-card-info';
+
     const nameEl = document.createElement('p');
     nameEl.className = 'clip-card-name';
     nameEl.textContent = clip.filename.replace(/\.[^.]+$/, '');
     info.appendChild(nameEl);
+
     if (showUploader && clip.uploader) {
       const uEl = document.createElement('p');
       uEl.className = 'clip-card-uploader';
@@ -163,7 +197,7 @@ function renderGrid(container, clips, showUploader) {
       uEl.style.color = getUserColor(clip.uploader);
       info.appendChild(uEl);
     }
-    // Delete button — only for the clip's owner
+
     if (username && clip.uploader && clip.uploader.toLowerCase() === username.toLowerCase()) {
       const delBtn = document.createElement('button');
       delBtn.className = 'clip-delete-btn';
@@ -172,13 +206,10 @@ function renderGrid(container, clips, showUploader) {
       delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm(`Delete "${clip.filename.replace(/\.[^.]+$/, '')}"?`)) return;
-        delBtn.disabled = true;
-        delBtn.textContent = 'deleting…';
+        delBtn.disabled = true; delBtn.textContent = 'deleting…';
         try {
           const r = await fetch(`${SERVER}/api/clips/${encodeURIComponent(clip.public_id)}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uploader: username })
+            method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ uploader: username })
           });
           const d = await r.json();
           if (d.success) { card.remove(); showStatus('clip deleted', 'success'); }
@@ -188,8 +219,7 @@ function renderGrid(container, clips, showUploader) {
       info.appendChild(delBtn);
     }
     card.appendChild(info);
-    container.appendChild(card);
-  });
+    grid.appendChild(card);
 }
 
 // ── Load clips ───────────────────────────────────────────────────────────
@@ -247,7 +277,8 @@ loadClips();
 // ── Socket: live notifications for new clips & color updates ─────────────
 (function() {
   const sock = io(SERVER, { query: { username: username || 'clips-viewer', color: '#000' }, reconnection: true });
-  sock.on('force_reload', () => { setTimeout(() => location.reload(), 600); });
+  // NOTE: force_reload removed here — it was interrupting batch uploads.
+  // The upload handler triggers its own reload after all files complete.
   sock.on('clip_uploaded', (data) => {
     if (data.uploader && data.uploader !== username) {
       if (window.hcNotify) window.hcNotify(`📎 ${data.uploader} uploaded a clip`);
@@ -257,15 +288,13 @@ loadClips();
   sock.on('update_colors', (data) => {
     if (data.userColors) {
       Object.assign(userColorMap, data.userColors);
-      const grid = document.getElementById('clips-grid-all');
-      renderGrid(grid, allClipsData, true);
+      renderGrid(document.getElementById('clips-grid-all'), allClipsData, true);
       buildTabBar([...new Set(allClipsData.map(c => c.uploader || 'unknown'))]);
     }
   });
   sock.on('user_renamed', (data) => {
     allClipsData.forEach(c => { if (c.uploader === data.oldUsername) c.uploader = data.newUsername; });
-    const grid = document.getElementById('clips-grid-all');
-    renderGrid(grid, allClipsData, true);
+    renderGrid(document.getElementById('clips-grid-all'), allClipsData, true);
     buildTabBar([...new Set(allClipsData.map(c => c.uploader || 'unknown'))]);
   });
 })();
@@ -487,7 +516,8 @@ submitBtn.addEventListener('click', async () => {
   setTimeout(async () => {
     progressWrap.style.display = 'none';
     progressBar.style.width = '0';
-    await loadClips();
+    // Hard reload to get fresh clip list sorted correctly
+    location.reload();
   }, 1800);
 });
 

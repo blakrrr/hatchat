@@ -130,7 +130,7 @@ app.post('/upload-clip', (req, res) => {
             file.buffer = null; // free RAM immediately
             // Broadcast clip upload notification to all connected clients
             io.emit('clip_uploaded', { uploader, filename: file.originalname });
-            io.emit('force_reload', { reason: 'clip_uploaded' });
+            // NOTE: force_reload is NOT emitted here — client fires it after all batch uploads finish
 
             res.json({
                 success:   true,
@@ -222,7 +222,8 @@ app.delete('/api/clips/:public_id(*)', async (req, res) => {
     }
 });
 
-// GET /api/clips ΓÇö returns all clips from Cloudinary, grouped by uploader then sorted by date
+// GET /api/clips — returns all clips from Cloudinary sorted by NVIDIA filename date (newest first)
+// Each clip includes a month_key like "2026-03" for grouping in the client.
 app.get('/api/clips', async (req, res) => {
     try {
         const result = await cloudinary.api.resources({
@@ -230,9 +231,18 @@ app.get('/api/clips', async (req, res) => {
             type: 'upload',
             prefix: 'hatchat-clips/',
             max_results: 200,
-            context: true,  // fetch uploader metadata
+            context: true,
             tags: true,
         });
+
+        // Extract NVIDIA date from filename: "Game YYYY.MM.DD - HH.MM.SS..."
+        function parseNvidiaDate(filename) {
+            const m = filename.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{2})\.(\d{2})\.(\d{2})/);
+            if (!m) return null;
+            // Build an ISO-style string for reliable sorting
+            return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+        }
+
         const clips = result.resources.map(r => {
             let uploader = 'unknown';
             if (r.context && r.context.custom && r.context.custom.uploader) {
@@ -241,22 +251,35 @@ app.get('/api/clips', async (req, res) => {
                 const tag = r.tags.find(t => t.startsWith('uploader:'));
                 if (tag) uploader = tag.replace('uploader:', '');
             }
-            // Use the Cloudinary URL directly ΓÇö ingest transformation already
-            // stored the compressed+trimmed version as the canonical file.
+            const filename = path.basename(r.public_id) + '.' + r.format;
+            const nvidiaDate = parseNvidiaDate(filename);
+            // month_key used by client to group under month headers (e.g. "march 2026")
+            let month_key = null;
+            if (nvidiaDate) {
+                const d = new Date(nvidiaDate);
+                month_key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            } else {
+                const d = new Date(r.created_at);
+                month_key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            }
             return {
-                filename:   path.basename(r.public_id) + '.' + r.format,
+                filename,
                 url:        r.secure_url,
                 public_id:  r.public_id,
                 created_at: r.created_at,
+                nvidia_date: nvidiaDate,
+                month_key,
                 uploader,
             };
         });
-        // Sort: by uploader name, then newest-first within each uploader
+
+        // Sort by NVIDIA date (newest first); fall back to Cloudinary created_at
         clips.sort((a, b) => {
-            const u = a.uploader.localeCompare(b.uploader);
-            if (u !== 0) return u;
-            return new Date(b.created_at) - new Date(a.created_at);
+            const da = a.nvidia_date || a.created_at;
+            const db = b.nvidia_date || b.created_at;
+            return new Date(db) - new Date(da);
         });
+
         res.json({ success: true, clips });
     } catch (error) {
         console.error('Cloudinary list error:', error);
@@ -270,7 +293,10 @@ const userColors = {};
 let users = {};
 const voiceMembers = {};
 
-const disconnectTimers = {};
+// Track how many socket connections each username has (across ALL pages).
+// Join is announced when count goes 0→1; leave when count goes 1→0.
+// No timer needed — navigating between pages keeps count ≥ 1.
+const userConnectionCount = {};
 
 // ΓöÇΓöÇΓöÇ ACCOUNTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // users.json stores: { username: { passwordHash, color, sessionTokens[] } }
@@ -429,15 +455,39 @@ app.get('/api/all-users', (req, res) => {
 
 const MESSAGES_FILE = path.join(__dirname, 'chat_messages.json');
 const USER_COLORS_FILE = path.join(__dirname, 'user_colors.json');
+const CLOUDINARY_MESSAGES_PUBLIC_ID = 'hatchat-data/chat_messages';
 
 let chatMessages = [];
-try {
-    if (fs.existsSync(MESSAGES_FILE)) {
-        chatMessages = JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8'));
-    } else {
-        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(chatMessages), 'utf8');
+
+// Boot: try Cloudinary first (persistent), fall back to local file
+async function loadMessagesFromCloudinary() {
+    try {
+        const result = await cloudinary.api.resource(CLOUDINARY_MESSAGES_PUBLIC_ID, { resource_type: 'raw' });
+        const resp = await fetch(result.secure_url + '?t=' + Date.now());
+        if (resp.ok) {
+            const text = await resp.text();
+            chatMessages = JSON.parse(text);
+            console.log(`Loaded ${chatMessages.length} messages from Cloudinary`);
+            // Also write local copy for fast subsequent reads
+            try { fs.writeFileSync(MESSAGES_FILE, text, 'utf8'); } catch (_) {}
+            return;
+        }
+    } catch (e) {
+        console.log('Cloudinary messages not found or error:', e.message);
     }
-} catch (e) { console.error('Error loading messages:', e); }
+    // Fall back to local file
+    try {
+        if (fs.existsSync(MESSAGES_FILE)) {
+            chatMessages = JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8'));
+            console.log(`Loaded ${chatMessages.length} messages from local file`);
+        } else {
+            fs.writeFileSync(MESSAGES_FILE, '[]', 'utf8');
+        }
+    } catch (e) { console.error('Error loading messages:', e); }
+}
+
+// Call once at startup (non-blocking — server still starts while this resolves)
+loadMessagesFromCloudinary().catch(e => console.error('Boot message load failed:', e));
 
 try {
     if (fs.existsSync(USER_COLORS_FILE)) {
@@ -447,15 +497,41 @@ try {
     }
 } catch (e) { console.error('Error loading user colors:', e); }
 
-// Debounce GitHub sync so rapid messages don't spam the API
+// Debounce saves — write local immediately, push to Cloudinary every 20s max
 let _msgSyncTimer = null;
 function saveMessages() {
-    try { fs.writeFileSync(MESSAGES_FILE, JSON.stringify(chatMessages), 'utf8'); }
-    catch (e) { console.error('Error saving messages:', e); }
+    const json = JSON.stringify(chatMessages);
+    // Write local immediately (fast, survives short restarts)
+    try { fs.writeFileSync(MESSAGES_FILE, json, 'utf8'); } catch (e) { console.error('Local msg save error:', e); }
+    // Debounce Cloudinary upload
     clearTimeout(_msgSyncTimer);
-    _msgSyncTimer = setTimeout(() => {
-        syncMessagesToGitHub().catch(e => console.warn('Msg GitHub sync failed:', e.message));
-    }, 15000); // sync at most once every 15 s
+    _msgSyncTimer = setTimeout(() => saveMessagesToCloudinary(), 20000);
+}
+
+async function saveMessagesToCloudinary() {
+    try {
+        const json = JSON.stringify(chatMessages);
+        // Upload as a raw file — this overwrites the same public_id every time
+        await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+                {
+                    resource_type: 'raw',
+                    public_id: CLOUDINARY_MESSAGES_PUBLIC_ID,
+                    overwrite: true,
+                    invalidate: true,
+                },
+                (err, result) => err ? reject(err) : resolve(result)
+            );
+            stream.end(Buffer.from(json, 'utf8'));
+        });
+        // Also mirror to GitHub as a backup
+        syncMessagesToGitHub().catch(e => console.warn('GitHub msg sync failed:', e.message));
+        console.log(`Messages saved to Cloudinary (${chatMessages.length} total)`);
+    } catch (e) {
+        console.error('Cloudinary message save error:', e.message);
+        // Fall back to GitHub only
+        syncMessagesToGitHub().catch(() => {});
+    }
 }
 
 async function syncMessagesToGitHub() {
@@ -498,18 +574,20 @@ io.on('connection', (socket) => {
     console.log(`User connected: ${username} (${socket.id})`);
 
     socket.on('user_join', (data) => {
-        if (disconnectTimers[data.username]) {
-            // User navigated between pages and reconnected quickly.
-            // Cancel the pending "left" announcement and skip the "joined" one too.
-            clearTimeout(disconnectTimers[data.username]);
-            delete disconnectTimers[data.username];
-            // Still refresh the user list so their dot shows up
-            io.emit('update_users', { users: Object.values(users), userColors });
-        } else {
-            // Genuine fresh join ΓÇö announce normally
-            io.emit('user_join', { username: data.username, users: Object.values(users), userColors });
-            chatMessages.push({ type: 'system', message: `${data.username} has joined the chat`, timestamp: new Date().toISOString() });
+        const uname = data.username;
+        const prev = userConnectionCount[uname] || 0;
+        userConnectionCount[uname] = prev + 1;
+
+        if (prev === 0) {
+            // Truly new arrival — announce and log it
+            const ts = new Date().toISOString();
+            const sysMsg = { type: 'system', message: `${uname} has joined the chat`, timestamp: ts };
+            chatMessages.push(sysMsg);
             saveMessages();
+            io.emit('user_join', { username: uname, users: Object.values(users), userColors, timestamp: ts });
+        } else {
+            // Just navigating between pages — silently refresh user list
+            io.emit('update_users', { users: Object.values(users), userColors });
         }
         io.emit('refresh_all_users');
     });
@@ -532,16 +610,16 @@ io.on('connection', (socket) => {
 
     socket.on('load_messages', (data) => {
         const page = data.page || 1;
-        const pageSize = 20;
+        const pageSize = 50;
         const start = Math.max(0, chatMessages.length - (page * pageSize));
-        const end = Math.max(0, chatMessages.length - ((page - 1) * pageSize));
+        const end   = Math.max(0, chatMessages.length - ((page - 1) * pageSize));
         socket.emit('chat_history', {
             messages: chatMessages.slice(start, end).reverse(),
             page,
             totalMessages: chatMessages.length,
+            hasMore: start > 0,
             userColors
         });
-        // Tell the client to scroll to the bottom after the first page loads
         if (page === 1) socket.emit('scroll_to_latest');
     });
 
@@ -587,22 +665,27 @@ io.on('connection', (socket) => {
         console.log(`User disconnected: ${username}`);
         const snapSocketId = socket.id;
 
-        disconnectTimers[username] = setTimeout(() => {
-            delete disconnectTimers[username];
-            chatMessages.push({ type: 'system', message: `${username} has left the chat`, timestamp: new Date().toISOString() });
+        // Decrement connection count for this username
+        const prev = userConnectionCount[username] || 1;
+        const next = prev - 1;
+        if (next <= 0) {
+            delete userConnectionCount[username];
+            // Truly gone — announce leave
+            const ts = new Date().toISOString();
+            chatMessages.push({ type: 'system', message: `${username} has left the chat`, timestamp: ts });
             saveMessages();
-            io.emit('user_leave', { username, users: Object.values(users), userColors });
-            io.emit('update_users', { users: Object.values(users) });
-            // Notify all clients to refresh their all-users panel
+            io.emit('user_leave', { username, users: Object.values(users), userColors, timestamp: ts });
             io.emit('refresh_all_users');
             if (voiceMembers[snapSocketId]) {
                 delete voiceMembers[snapSocketId];
                 io.emit('voice_user_left', { socketId: snapSocketId });
             }
-        }, 5 * 60 * 1000);
-
-        io.emit('update_users', { users: Object.values(users) });
-        io.emit('refresh_all_users');
+        } else {
+            userConnectionCount[username] = next;
+            // Still on another page — just refresh user list silently
+            io.emit('update_users', { users: Object.values(users) });
+            io.emit('refresh_all_users');
+        }
     });
 });
 
