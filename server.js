@@ -297,52 +297,58 @@ const userConnectionCount = {};
 // ΓöÇΓöÇΓöÇ ACCOUNTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // users.json stores: { username: { passwordHash, color, sessionTokens[] } }
 const USERS_FILE = path.join(__dirname, 'users.json');
+const CLOUDINARY_USERS_PUBLIC_ID = 'hatchat-data/users';
 let registeredUsers = {};
-try {
-    if (fs.existsSync(USERS_FILE)) {
-        registeredUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    } else {
-        fs.writeFileSync(USERS_FILE, '{}', 'utf8');
-    }
-} catch (e) { console.error('Error loading users:', e); }
 
-function saveRegisteredUsers() {
-    try { fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2), 'utf8'); }
-    catch (e) { console.error('Error saving users:', e); }
-    // Push to GitHub so accounts survive Render restarts (ephemeral disk)
-    syncUsersToGitHub().catch(e => console.warn('GitHub sync failed:', e.message));
+// Boot: load users from Cloudinary first, fall back to local file
+async function loadUsersFromCloudinary() {
+    try {
+        const result = await cloudinary.api.resource(CLOUDINARY_USERS_PUBLIC_ID, { resource_type: 'raw' });
+        const resp = await fetch(result.secure_url + '?t=' + Date.now());
+        if (resp.ok) {
+            const text = await resp.text();
+            registeredUsers = JSON.parse(text);
+            console.log(`Loaded ${Object.keys(registeredUsers).length} users from Cloudinary`);
+            try { fs.writeFileSync(USERS_FILE, text, 'utf8'); } catch (_) {}
+            return;
+        }
+    } catch (e) {
+        console.log('Cloudinary users not found, falling back to local:', e.message);
+    }
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            registeredUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+            console.log(`Loaded ${Object.keys(registeredUsers).length} users from local file`);
+        } else {
+            fs.writeFileSync(USERS_FILE, '{}', 'utf8');
+        }
+    } catch (e) { console.error('Error loading users:', e); }
 }
 
-async function syncUsersToGitHub() {
-    const token = process.env.GITHUB_TOKEN;
-    const repo  = process.env.GITHUB_REPO; // e.g. "blakrrr/hatchat"
-    if (!token || !repo) return;
+let _userSyncTimer = null;
+function saveRegisteredUsers() {
+    // Write local immediately
+    try { fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2), 'utf8'); }
+    catch (e) { console.error('Error saving users locally:', e); }
+    // Debounce Cloudinary upload — no GitHub commits, no Render restarts
+    clearTimeout(_userSyncTimer);
+    _userSyncTimer = setTimeout(() => saveUsersToCloudinary(), 5000);
+}
 
-    const content = Buffer.from(JSON.stringify(registeredUsers, null, 2)).toString('base64');
-    const apiUrl  = `https://api.github.com/repos/${repo}/contents/users.json`;
-
-    // Need the current SHA to update an existing file
-    let sha;
+async function saveUsersToCloudinary() {
     try {
-        const get = await fetch(apiUrl, {
-            headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'hatchat-server' }
+        const json = JSON.stringify(registeredUsers, null, 2);
+        await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+                { resource_type: 'raw', public_id: CLOUDINARY_USERS_PUBLIC_ID, overwrite: true, invalidate: true },
+                (err, result) => err ? reject(err) : resolve(result)
+            );
+            stream.end(Buffer.from(json, 'utf8'));
         });
-        if (get.ok) { const j = await get.json(); sha = j.sha; }
-    } catch (_) {}
-
-    await fetch(apiUrl, {
-        method: 'PUT',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'User-Agent': 'hatchat-server'
-        },
-        body: JSON.stringify({
-            message: 'chore: sync users [skip ci]',
-            content,
-            ...(sha ? { sha } : {})
-        })
-    });
+        console.log(`Users saved to Cloudinary (${Object.keys(registeredUsers).length} total)`);
+    } catch (e) {
+        console.error('Cloudinary user save error:', e.message);
+    }
 }
 
 // POST /api/register ΓÇö username + password + color, no email needed
@@ -505,6 +511,7 @@ async function loadMessagesFromCloudinary() {
 
 // Call once at startup (non-blocking — server still starts while this resolves)
 loadMessagesFromCloudinary().catch(e => console.error('Boot message load failed:', e));
+loadUsersFromCloudinary().catch(e => console.error('Boot user load failed:', e));
 
 try {
     if (fs.existsSync(USER_COLORS_FILE)) {
@@ -541,34 +548,10 @@ async function saveMessagesToCloudinary() {
             );
             stream.end(Buffer.from(json, 'utf8'));
         });
-        // Also mirror to GitHub as a backup
-        syncMessagesToGitHub().catch(e => console.warn('GitHub msg sync failed:', e.message));
         console.log(`Messages saved to Cloudinary (${chatMessages.length} total)`);
     } catch (e) {
         console.error('Cloudinary message save error:', e.message);
-        // Fall back to GitHub only
-        syncMessagesToGitHub().catch(() => {});
     }
-}
-
-async function syncMessagesToGitHub() {
-    const token = process.env.GITHUB_TOKEN;
-    const repo  = process.env.GITHUB_REPO;
-    if (!token || !repo) return;
-    const content = Buffer.from(JSON.stringify(chatMessages)).toString('base64');
-    const apiUrl  = `https://api.github.com/repos/${repo}/contents/chat_messages.json`;
-    let sha;
-    try {
-        const get = await fetch(apiUrl, {
-            headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'hatchat-server' }
-        });
-        if (get.ok) { const j = await get.json(); sha = j.sha; }
-    } catch (_) {}
-    await fetch(apiUrl, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'hatchat-server' },
-        body: JSON.stringify({ message: 'chore: sync messages [skip ci]', content, ...(sha ? { sha } : {}) })
-    });
 }
 
 function saveUserColors() {

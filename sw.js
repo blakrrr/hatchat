@@ -1,24 +1,22 @@
 // hatchat service worker
-// Caches the app shell so it loads instantly and works offline.
-// Strategy: cache-first for static assets, network-first for API calls.
+// HTML pages: network-first (always get fresh code on deploy)
+// Static assets (CSS, images, fonts): cache-first (fast loads)
+// API / socket.io: always network, never cached
 
-const CACHE = 'hatchat-v5'; // bumped — forces all clients to re-fetch fresh HTML/CSS
-const SHELL = [
-  '/',
-  '/chat.html',
-  '/clips.html',
-  '/index.html',
-  '/settings.html',
-  '/download.html',
-  '/style.css',
-  '/manifest.json',
-  '/public/icons/icon-192.png',
-  '/public/icons/icon-512.png',
-];
+const CACHE = 'hatchat-v6';
+
+const HTML_PAGES = ['/', '/chat', '/clips', '/settings', '/download'];
+const HTML_FILES = ['/chat.html', '/clips.html', '/index.html', '/settings.html', '/download.html'];
 
 self.addEventListener('install', e => {
+  // Pre-cache only non-HTML assets so HTML is always fresh
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(c => c.addAll([
+      '/style.css',
+      '/manifest.json',
+      '/public/icons/icon-192.png',
+      '/public/icons/icon-512.png',
+    ])).then(() => self.skipWaiting())
   );
 });
 
@@ -32,15 +30,35 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  const path = url.pathname;
 
-  // Always go to network for socket.io, API calls, and uploads
-  if (url.pathname.startsWith('/socket.io') ||
-      url.pathname.startsWith('/api/') ||
-      url.pathname.startsWith('/upload')) {
-    return; // let it fall through to network
+  // Never intercept socket.io, API, or upload requests
+  if (path.startsWith('/socket.io') ||
+      path.startsWith('/api/') ||
+      path.startsWith('/upload')) {
+    return;
   }
 
-  // Cache-first for everything else (HTML, CSS, images)
+  const isHTML = HTML_FILES.some(p => path === p) ||
+                 HTML_PAGES.some(p => path === p) ||
+                 path === '/';
+
+  if (isHTML) {
+    // Network-first: always try to get the latest HTML from the server.
+    // Only fall back to cache if the network is completely down.
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cache-first for everything else (CSS, images, fonts, JS libs)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
