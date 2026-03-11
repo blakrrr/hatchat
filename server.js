@@ -359,12 +359,38 @@ app.post('/api/login', async (req, res) => {
     res.json({ success: true, token, username: user.username, color: user.color });
 });
 
-// POST /api/update-profile — change username color (and optionally username display) for logged-in user
+// POST /api/update-profile — change username and/or color for logged-in user
 app.post('/api/update-profile', async (req, res) => {
     const { token, color, username: newDisplay } = req.body || {};
     if (!token) return res.status(401).json({ success: false, message: 'Not authenticated' });
-    const user = Object.values(registeredUsers).find(u => u.sessionTokens?.includes(token));
-    if (!user) return res.status(401).json({ success: false, message: 'Invalid session' });
+
+    // Find the user record by token
+    const userKey = Object.keys(registeredUsers).find(k => registeredUsers[k].sessionTokens?.includes(token));
+    if (!userKey) return res.status(401).json({ success: false, message: 'Invalid session' });
+    const user = registeredUsers[userKey];
+
+    // Handle username rename
+    if (newDisplay && newDisplay.trim() && newDisplay.trim() !== user.username) {
+        const trimmed = newDisplay.trim().substring(0, 8);
+        const newKey = trimmed.toLowerCase();
+        if (newKey !== userKey && registeredUsers[newKey]) {
+            return res.status(409).json({ success: false, message: 'Username already taken' });
+        }
+        // Move record to new key, update display name
+        const oldUsername = user.username;
+        user.username = trimmed;
+        if (newKey !== userKey) {
+            registeredUsers[newKey] = user;
+            delete registeredUsers[userKey];
+        }
+        // Update color map
+        if (userColors[oldUsername]) {
+            userColors[trimmed] = userColors[oldUsername];
+            delete userColors[oldUsername];
+        }
+        // Broadcast name change so chat updates live
+        io.emit('user_renamed', { oldUsername, newUsername: trimmed });
+    }
 
     if (color) user.color = color;
     saveRegisteredUsers();
@@ -373,6 +399,7 @@ app.post('/api/update-profile', async (req, res) => {
     userColors[user.username] = user.color;
     saveUserColors();
     io.emit('update_colors', { userColors });
+    io.emit('refresh_all_users');
 
     res.json({ success: true, username: user.username, color: user.color });
 });

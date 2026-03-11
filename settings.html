@@ -86,7 +86,7 @@
 </head>
 <body>
     <header>
-        <div class="logo">hatchat - 1.0.1.0</div>
+        <div class="logo">hatchat - 1.0.2.0</div>
         <nav>
             <ul>
                 <li><a href="clips.html">clips</a></li>
@@ -209,28 +209,28 @@
             const token = localStorage.getItem('hc_token');
             const color = colorInput.value;
 
-            // Always update localStorage
-            localStorage.setItem('chat_color', color);
-
-            // If logged in, persist to server so clips and chat update everywhere
             if (token) {
                 try {
                     const r = await fetch(`${SERVER}/api/update-profile`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token, color })
+                        body: JSON.stringify({ token, color, username: u })
                     });
                     const d = await r.json();
                     if (!d.success) { showError(d.message || 'Server error saving profile'); return; }
                     // Update stored username/color from server truth
                     localStorage.setItem('chat_username', d.username);
                     localStorage.setItem('chat_color', d.color);
-                    showSuccess('Profile saved — color updated everywhere!');
+                    usernameInput.value = d.username;
+                    colorInput.value = d.color;
+                    showSuccess('Profile saved — name & color updated everywhere!');
                 } catch(err) {
                     showError('Could not reach server: ' + err.message);
                     return;
                 }
             } else {
+                localStorage.setItem('chat_color', color);
+                localStorage.setItem('chat_username', u);
                 showSuccess('Profile updated locally (log in to sync everywhere)');
             }
         });

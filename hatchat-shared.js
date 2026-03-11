@@ -1,20 +1,32 @@
 /**
- * hatchat-shared.js — v1.0.1.0
+ * hatchat-shared.js — v1.0.2.0
  * Shared utilities: zoom adjuster, notification bar.
  * Include this script in every HTML page.
  */
 
-// ── Version ──────────────────────────────────────────────────────────────
-const HATCHAT_VERSION = '1.0.1.0';
+// ── Version ───────────────────────────────────────────────────────────────
+const HATCHAT_VERSION = '1.0.2.0';
 
-// ── Zoom ─────────────────────────────────────────────────────────────────
+// ── Zoom ──────────────────────────────────────────────────────────────────
 (function initZoom() {
     const ZOOM_KEY = 'hc_zoom';
     let zoom = parseFloat(localStorage.getItem(ZOOM_KEY)) || 100;
 
     function applyZoom(z) {
         zoom = Math.min(200, Math.max(10, z));
-        document.body.style.zoom = (zoom / 100);
+        document.documentElement.style.setProperty('--hc-zoom', zoom / 100);
+        // On chat page: zoom only the scrollable messages area, keep typing bar pinned
+        const chatMessages = document.getElementById('chat-messages');
+        const mainContent = document.querySelector('.main-content');
+        if (chatMessages) {
+            // Chat page — scale messages + user list but not the form/header
+            chatMessages.style.zoom = zoom / 100;
+            const userList = document.querySelector('.user-list');
+            if (userList) userList.style.zoom = zoom / 100;
+        } else {
+            // Other pages — fallback to whole body
+            document.body.style.zoom = zoom / 100;
+        }
         localStorage.setItem(ZOOM_KEY, zoom);
         const el = document.getElementById('hc-zoom-val');
         if (el) el.textContent = zoom + '%';
@@ -30,29 +42,46 @@ const HATCHAT_VERSION = '1.0.1.0';
         else if (e.key === '0')             { e.preventDefault(); applyZoom(100); }
     });
 
-    // Inject zoom widget into header after DOM ready
+    // Inject zoom widget into the load-more-container row after DOM ready
     document.addEventListener('DOMContentLoaded', () => {
         applyZoom(zoom);
 
-        const nav = document.querySelector('header nav');
-        if (!nav) return;
-
-        const wrap = document.createElement('div');
-        wrap.id = 'hc-zoom-wrap';
-        wrap.title = 'Page Zoom (Ctrl +/-)';
-        wrap.innerHTML = `
-            <span class="hc-zoom-label">zoom</span>
-            <input id="hc-zoom-slider" type="range" min="10" max="200" step="5" value="${zoom}">
-            <span id="hc-zoom-val">${zoom}%</span>
-        `;
-        wrap.querySelector('#hc-zoom-slider').addEventListener('input', (e) => {
-            applyZoom(parseInt(e.target.value));
-        });
-        nav.parentNode.insertBefore(wrap, nav);
+        const loadMoreContainer = document.querySelector('.load-more-container');
+        if (loadMoreContainer) {
+            const wrap = document.createElement('div');
+            wrap.id = 'hc-zoom-wrap';
+            wrap.title = 'Page Zoom (Ctrl +/-)';
+            wrap.innerHTML = `
+                <span class="hc-zoom-label">zoom</span>
+                <input id="hc-zoom-slider" type="range" min="10" max="200" step="5" value="${zoom}">
+                <span id="hc-zoom-val">${zoom}%</span>
+            `;
+            wrap.querySelector('#hc-zoom-slider').addEventListener('input', (e) => {
+                applyZoom(parseInt(e.target.value));
+            });
+            loadMoreContainer.appendChild(wrap);
+        } else {
+            // fallback: inject after header
+            const header = document.querySelector('header');
+            if (!header) return;
+            const wrap = document.createElement('div');
+            wrap.id = 'hc-zoom-wrap';
+            wrap.classList.add('hc-zoom-standalone');
+            wrap.title = 'Page Zoom (Ctrl +/-)';
+            wrap.innerHTML = `
+                <span class="hc-zoom-label">zoom</span>
+                <input id="hc-zoom-slider" type="range" min="10" max="200" step="5" value="${zoom}">
+                <span id="hc-zoom-val">${zoom}%</span>
+            `;
+            wrap.querySelector('#hc-zoom-slider').addEventListener('input', (e) => {
+                applyZoom(parseInt(e.target.value));
+            });
+            header.insertAdjacentElement('afterend', wrap);
+        }
     });
 })();
 
-// ── Notification bar ─────────────────────────────────────────────────────
+// ── Notification bar ──────────────────────────────────────────────────────
 (function initNotifBar() {
     const NOTIF_KEY = 'hc_last_notif';
     let notifTimeout = null;
@@ -85,62 +114,82 @@ const HATCHAT_VERSION = '1.0.1.0';
     // Expose global function for pages to fire cross-page notifications
     window.hcNotify = function(msg) {
         showNotif(msg);
-        // Store so other tabs see it
         localStorage.setItem(NOTIF_KEY, JSON.stringify({ msg, t: Date.now() }));
-        // Clear immediately so same message can fire again
         setTimeout(() => localStorage.removeItem(NOTIF_KEY), 100);
     };
 })();
 
-// ── Shared CSS (injected into <head>) ────────────────────────────────────
+// ── Shared CSS (injected into <head>) ─────────────────────────────────────
 (function injectSharedStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        /* Zoom widget */
+        /* Zoom widget — lives in the load-more row */
         #hc-zoom-wrap {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 6px;
-            margin-right: 1rem;
+            margin-left: 1rem;
             font-size: 0.75rem;
-            color: #aaa;
+            color: #888;
+            vertical-align: middle;
         }
-        .hc-zoom-label { user-select: none; }
+        #hc-zoom-wrap.hc-zoom-standalone {
+            display: flex;
+            padding: 0.3rem 1rem;
+            background: #0a0a0a;
+            border-bottom: 1px solid #1e1e1e;
+        }
+        .hc-zoom-label { user-select: none; color: #666; }
         #hc-zoom-slider {
-            width: 70px;
-            accent-color: #7c6af7;
+            width: 80px;
+            accent-color: #555;
             cursor: pointer;
         }
         #hc-zoom-val {
             min-width: 3.5ch;
             text-align: right;
-            color: #7c6af7;
+            color: #999;
             font-weight: bold;
         }
 
-        /* Notification bar */
+        /* Notification bar — boxy, greyscale, between chat messages and voice panel */
         #hc-notif-bar {
             position: fixed;
-            bottom: 1.5rem;
-            left: 50%;
-            transform: translateX(-50%) translateY(120%);
-            background: #1e1e2e;
-            border: 1px solid #7c6af7;
-            color: #e0e0e0;
-            padding: 0.5rem 1.4rem;
-            border-radius: 999px;
-            font-size: 0.85rem;
+            right: 168px; /* clears the voice panel (160px + 8px gap) */
+            bottom: 72px; /* clears the chat-form bar */
+            transform: translateY(150%);
+            background: #181818;
+            border: 1px solid #2e2e2e;
+            border-left: 3px solid #444;
+            color: #bbb;
+            padding: 0.5rem 0.8rem;
+            border-radius: 3px;
+            font-size: 0.76rem;
             font-family: 'DejaVu Sans Mono', monospace;
-            box-shadow: 0 4px 20px rgba(124,106,247,0.3);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.7);
             z-index: 9999;
             white-space: nowrap;
-            transition: transform 0.3s ease, opacity 0.3s ease;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: transform 0.2s ease, opacity 0.2s ease;
             opacity: 0;
             pointer-events: none;
         }
         #hc-notif-bar.hc-notif-visible {
-            transform: translateX(-50%) translateY(0);
+            transform: translateY(0);
             opacity: 1;
+        }
+
+        /* On non-chat pages (clips, settings) — center bottom */
+        body:not(.chat-page) #hc-notif-bar {
+            right: auto;
+            left: 50%;
+            bottom: 1.5rem;
+            transform: translateX(-50%) translateY(150%);
+        }
+        body:not(.chat-page) #hc-notif-bar.hc-notif-visible {
+            transform: translateX(-50%) translateY(0);
         }
     `;
     document.head.appendChild(style);

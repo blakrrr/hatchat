@@ -14,7 +14,7 @@
 <body class="clips-page">
 
 <header>
-  <div class="logo">hatchat - 1.0.1.0</div>
+  <div class="logo">hatchat - 1.0.2.0</div>
   <nav>
     <ul>
       <li><a href="clips.html">clips</a></li>
@@ -33,7 +33,7 @@
   <div class="clips-theater" id="clips-theater" style="display:none">
     <video class="theater-video" id="theater-video" preload="metadata"></video>
     <div class="theater-controls">
-      <div class="tc-trim-wrap" title="Preview start: 15 · 20 · 30 · 45 · 60s">
+      <div class="tc-trim-wrap" title="Trim: 15s · 20s · 30s · 45s · 60s (full)">
         <span class="tc-trim-label">trim</span>
         <input type="range" class="tc-trim" id="tc-trim" min="0" max="4" step="1" value="4">
         <span class="tc-trim-val" id="tc-trim-val">60s</span>
@@ -81,6 +81,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
 <script>
 const SERVER   = 'https://averrgy-github-io.onrender.com';
 const username = localStorage.getItem('chat_username') || null;
@@ -242,6 +243,31 @@ function switchTab(tab) {
 }
 
 loadClips();
+
+// ── Socket: live notifications for new clips & color updates ─────────────
+(function() {
+  const sock = io(SERVER, { query: { username: username || 'clips-viewer', color: '#000' }, reconnection: true });
+  sock.on('clip_uploaded', (data) => {
+    if (data.uploader && data.uploader !== username) {
+      if (window.hcNotify) window.hcNotify(`📎 ${data.uploader} uploaded a clip`);
+      loadClips();
+    }
+  });
+  sock.on('update_colors', (data) => {
+    if (data.userColors) {
+      Object.assign(userColorMap, data.userColors);
+      const grid = document.getElementById('clips-grid-all');
+      renderGrid(grid, allClipsData, true);
+      buildTabBar([...new Set(allClipsData.map(c => c.uploader || 'unknown'))]);
+    }
+  });
+  sock.on('user_renamed', (data) => {
+    allClipsData.forEach(c => { if (c.uploader === data.oldUsername) c.uploader = data.newUsername; });
+    const grid = document.getElementById('clips-grid-all');
+    renderGrid(grid, allClipsData, true);
+    buildTabBar([...new Set(allClipsData.map(c => c.uploader || 'unknown'))]);
+  });
+})();
 
 // ── Theater player ───────────────────────────────────────────────────────
 const tvid     = document.getElementById('theater-video');

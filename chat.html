@@ -12,9 +12,9 @@
     <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
     <script src="hatchat-shared.js"></script>
 </head>
-<body>
+<body class="chat-page">
     <header>
-        <div class="logo">hatchat - 1.0.1.0</div>
+        <div class="logo">hatchat - 1.0.2.0</div>
         <nav><ul>
             <li><a href="clips.html">clips</a></li>
             <li><a href="index.html">homepage</a></li>
@@ -355,6 +355,21 @@
         socket.on('refresh_all_users', () => loadAllUsers());
         socket.on('update_colors', (data) => {
             if (data.userColors) { userColors = data.userColors; updateDisplayedColors(); }
+        });
+        socket.on('user_renamed', (data) => {
+            // Update any rendered message that used the old username
+            document.querySelectorAll('.message-sender').forEach(el => {
+                if (el.getAttribute('data-sender') === data.oldUsername) {
+                    el.setAttribute('data-sender', data.newUsername);
+                    el.textContent = data.newUsername;
+                }
+            });
+            // If we are the renamed user, update our local state too
+            if (username === data.oldUsername) {
+                username = data.newUsername;
+                localStorage.setItem('chat_username', data.newUsername);
+            }
+            loadAllUsers();
         });
 
         loadMoreBtn.addEventListener('click', () => {
