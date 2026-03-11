@@ -716,6 +716,15 @@ body.clips-page {
 /* ── Clips grid ──────────────────────────────────────────────── */
 .clips-grid-section {}
 
+/* Direct grid containers used by JS */
+#clips-grid-all,
+#clips-grid-user {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 0.75rem 0;
+}
+
 /* Month section */
 .clips-month-section {
     margin-bottom: 2rem;
@@ -950,6 +959,6 @@ body.clips-page {
         flex-wrap: wrap;
     }
 
-    .clips-grid { grid-template-columns: 1fr; }
+    #clips-grid-all, #clips-grid-user { grid-template-columns: 1fr; }
     .clips-main { padding: 1rem; }
 }
