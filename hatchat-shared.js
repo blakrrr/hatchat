@@ -1,9 +1,9 @@
 /**
- * hatchat-shared.js — v1.0.4.0
+ * hatchat-shared.js — v1.0.5.0
  * Shared: zoom (per-page, server-synced), notification bar, prefs helpers.
  */
 
-const HATCHAT_VERSION = '1.0.4.0';
+const HATCHAT_VERSION = '1.0.5.0';
 const SERVER = 'https://averrgy-github-io.onrender.com';
 
 // ── Prefs: load from server on boot, save on change (debounced) ───────────
@@ -228,6 +228,16 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
         body.has-online-panel .clips-main,
         body.has-online-panel .main-content {
             margin-right: 164px;
+            box-sizing: border-box;
+        }
+        /* Theater fullscreen: cover everything including the panel */
+        .theater-fs {
+            z-index: 1000 !important;
+        }
+        /* Non-FS theater: ensure it doesn't overlap the panel */
+        body.has-online-panel .clips-theater:not(.theater-fs) {
+            margin-right: 0;
+            max-width: calc(100% - 0px);
         }
     `;
     document.head.appendChild(style);

@@ -23,6 +23,14 @@ app.use(cors());
 // Remove Express body size limits for clip uploads (multer handles multipart directly)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Force browsers to always revalidate JS and CSS — no stale cache across clients
+app.use((req, res, next) => {
+    if (/\.(js|css)$/.test(req.path)) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+    }
+    next();
+});
 // Serve static assets from /public (sounds, uploads, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve root-level HTML files (chat.html, clips.html, settings.html, index.html)
