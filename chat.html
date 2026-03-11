@@ -453,22 +453,19 @@
         socket.on('chat_history', (data) => {
             loadingIndicator.style.display = 'none'; isLoading = false;
             if (data.userColors) userColors = data.userColors;
-            if (currentPage === 1) chatMessagesEl.innerHTML = '';
+            chatMessagesEl.innerHTML = '';
             const msgs = [];
-            data.messages.forEach((msg, i) => {
+            // Server sends newest-first, so reverse to get chronological order
+            const chronological = [...data.messages].reverse();
+            chronological.forEach((msg) => {
                 if (msg.type === 'system') { msgs.push(createSystemMessageElement(msg.message, msg.timestamp)); return; }
-                let isCont = false;
-                if (currentPage > 1 && i > 0 && !msg.replyTo) {
-                    const prev = data.messages[i-1];
-                    isCont = prev.type !== 'system' && prev.username === msg.username;
-                }
-                msgs.push(createMessageElement(msg.username, msg.message, msg.timestamp, isCont, msg.color || userColors[msg.username], msg.image, msg.replyTo));
+                msgs.push(createMessageElement(msg.username, msg.message, msg.timestamp, false, msg.color || userColors[msg.username], msg.image, msg.replyTo));
             });
-            if (currentPage === 1) { msgs.reverse(); recalcContinuations(msgs); } else recalcContinuations(msgs);
+            recalcContinuations(msgs);
             const frag = document.createDocumentFragment();
             msgs.forEach(el => frag.appendChild(el));
-            if (currentPage === 1) { chatMessagesEl.appendChild(frag); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
-            else chatMessagesEl.insertBefore(frag, chatMessagesEl.firstChild);
+            chatMessagesEl.appendChild(frag);
+            chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
         });
 
         socket.on('user_join',  (data) => { displaySystemMessage(`${data.username} has joined the chat`, data.timestamp); if (data.userColors) userColors = data.userColors; loadAllUsers(); });
