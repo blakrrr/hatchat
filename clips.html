@@ -247,6 +247,7 @@ loadClips();
 // ── Socket: live notifications for new clips & color updates ─────────────
 (function() {
   const sock = io(SERVER, { query: { username: username || 'clips-viewer', color: '#000' }, reconnection: true });
+  sock.on('force_reload', () => { setTimeout(() => location.reload(), 600); });
   sock.on('clip_uploaded', (data) => {
     if (data.uploader && data.uploader !== username) {
       if (window.hcNotify) window.hcNotify(`📎 ${data.uploader} uploaded a clip`);

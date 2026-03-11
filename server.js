@@ -130,6 +130,7 @@ app.post('/upload-clip', (req, res) => {
             file.buffer = null; // free RAM immediately
             // Broadcast clip upload notification to all connected clients
             io.emit('clip_uploaded', { uploader, filename: file.originalname });
+            io.emit('force_reload', { reason: 'clip_uploaded' });
 
             res.json({
                 success:   true,
@@ -400,6 +401,8 @@ app.post('/api/update-profile', async (req, res) => {
     saveUserColors();
     io.emit('update_colors', { userColors });
     io.emit('refresh_all_users');
+    // Tell all connected clients to hard-reload so names/colors propagate everywhere
+    io.emit('force_reload', { reason: 'profile_update' });
 
     res.json({ success: true, username: user.username, color: user.color });
 });
@@ -444,9 +447,35 @@ try {
     }
 } catch (e) { console.error('Error loading user colors:', e); }
 
+// Debounce GitHub sync so rapid messages don't spam the API
+let _msgSyncTimer = null;
 function saveMessages() {
     try { fs.writeFileSync(MESSAGES_FILE, JSON.stringify(chatMessages), 'utf8'); }
     catch (e) { console.error('Error saving messages:', e); }
+    clearTimeout(_msgSyncTimer);
+    _msgSyncTimer = setTimeout(() => {
+        syncMessagesToGitHub().catch(e => console.warn('Msg GitHub sync failed:', e.message));
+    }, 15000); // sync at most once every 15 s
+}
+
+async function syncMessagesToGitHub() {
+    const token = process.env.GITHUB_TOKEN;
+    const repo  = process.env.GITHUB_REPO;
+    if (!token || !repo) return;
+    const content = Buffer.from(JSON.stringify(chatMessages)).toString('base64');
+    const apiUrl  = `https://api.github.com/repos/${repo}/contents/chat_messages.json`;
+    let sha;
+    try {
+        const get = await fetch(apiUrl, {
+            headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'hatchat-server' }
+        });
+        if (get.ok) { const j = await get.json(); sha = j.sha; }
+    } catch (_) {}
+    await fetch(apiUrl, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'hatchat-server' },
+        body: JSON.stringify({ message: 'chore: sync messages [skip ci]', content, ...(sha ? { sha } : {}) })
+    });
 }
 
 function saveUserColors() {
@@ -577,7 +606,25 @@ io.on('connection', (socket) => {
     });
 });
 
-// ΓöÇΓöÇΓöÇ STATIC PAGE ROUTES ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// GET /api/search?q=keyword&user=username  — message search
+// ?q=    keyword search (message body only, no usernames)
+// ?user= show all messages by that user (newest first)
+app.get('/api/search', (req, res) => {
+    const { q, user } = req.query;
+    if (!q && !user) return res.status(400).json({ success: false, message: 'Provide q or user param' });
+    let results = chatMessages.filter(m => m.type === 'message');
+    if (user) {
+        results = results.filter(m => m.username && m.username.toLowerCase() === user.toLowerCase());
+        results = results.slice().reverse(); // newest first
+    } else if (q) {
+        const term = q.toLowerCase().trim();
+        results = results.filter(m => m.message && m.message.toLowerCase().includes(term));
+        results = results.slice().reverse();
+    }
+    res.json({ success: true, results: results.slice(0, 200) }); // cap at 200
+});
+
+// ── STATIC PAGE ROUTES ────────────────────────────────────────────────────
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'chat.html')));
 app.get('/clips', (req, res) => res.sendFile(path.join(__dirname, 'clips.html')));

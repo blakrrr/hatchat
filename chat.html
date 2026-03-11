@@ -11,10 +11,70 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
     <script src="hatchat-shared.js"></script>
+    <style>
+        /* ── Search Modal ── */
+        #search-modal {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75); z-index: 500;
+            justify-content: center; align-items: flex-start;
+            padding-top: 8vh;
+        }
+        #search-modal.open { display: flex; }
+        .search-box {
+            background: #141414; border: 1px solid #2e2e2e;
+            border-radius: 6px; width: 90%; max-width: 640px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.9);
+            font-family: 'DejaVu Sans Mono', monospace;
+            overflow: hidden;
+        }
+        .search-header {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.75rem 1rem; border-bottom: 1px solid #222;
+        }
+        .search-mode-btn {
+            padding: 0.2rem 0.6rem; font-size: 0.72rem;
+            font-family: 'DejaVu Sans Mono', monospace;
+            background: #1e1e1e; border: 1px solid #333;
+            color: #888; border-radius: 3px; cursor: pointer;
+        }
+        .search-mode-btn.active { background: #2a2a2a; color: #ddd; border-color: #555; }
+        .search-input-wrap { flex: 1; display: flex; align-items: center; gap: 0.4rem; }
+        #search-input {
+            flex: 1; background: #0e0e0e; border: 1px solid #333;
+            color: #ddd; padding: 0.45rem 0.65rem; border-radius: 3px;
+            font-family: 'DejaVu Sans Mono', monospace; font-size: 0.88rem;
+        }
+        #search-input:focus { outline: none; border-color: #555; }
+        .search-close-btn {
+            background: none; border: none; color: #555; cursor: pointer;
+            font-size: 1.1rem; line-height: 1; padding: 0 4px;
+        }
+        .search-close-btn:hover { color: #aaa; }
+        .search-hint {
+            font-size: 0.68rem; color: #444;
+            padding: 0.3rem 1rem 0.4rem;
+            border-bottom: 1px solid #1a1a1a;
+        }
+        .search-results {
+            max-height: 55vh; overflow-y: auto;
+            padding: 0.3rem 0;
+        }
+        .search-result {
+            padding: 0.45rem 1rem; font-size: 0.8rem;
+            border-bottom: 1px solid #1a1a1a; cursor: default;
+        }
+        .search-result:hover { background: #1a1a1a; }
+        .sr-user { font-weight: bold; margin-right: 0.5rem; }
+        .sr-msg { color: #aaa; }
+        .sr-ts { float: right; font-size: 0.66rem; color: #444; }
+        .search-empty { padding: 1.5rem; text-align: center; color: #444; font-size: 0.8rem; }
+        /* DND dot color */
+        .dnd-active .user-dot { background-color: #cf4444 !important; }
+    </style>
 </head>
 <body class="chat-page">
     <header>
-        <div class="logo">hatchat - 1.0.2.0</div>
+        <div class="logo">hatchat - 1.0.3.0</div>
         <nav><ul>
             <li><a href="clips.html">clips</a></li>
             <li><a href="index.html">homepage</a></li>
@@ -25,7 +85,7 @@
     </header>
 
     <div class="load-more-container">
-        <button id="load-more-btn" class="load-more-btn">Load Earlier Messages</button>
+        <button id="search-open-btn" class="load-more-btn">🔍 Search Messages</button>
     </div>
 
     <div class="main-content">
@@ -61,7 +121,6 @@
             </form>
         </div>
 
-        <!-- Voice Chat Panel -->
         <div class="voice-panel" id="voice-panel">
             <h3 class="voice-panel-title">voice</h3>
             <div class="voice-channel">
@@ -79,11 +138,28 @@
         </div>
     </div>
 
+    <!-- Search Modal -->
+    <div id="search-modal">
+        <div class="search-box">
+            <div class="search-header">
+                <button class="search-mode-btn active" id="sm-keyword">keyword</button>
+                <button class="search-mode-btn" id="sm-user">by user</button>
+                <div class="search-input-wrap">
+                    <input id="search-input" type="text" placeholder="search messages…" autocomplete="off">
+                </div>
+                <button class="search-close-btn" id="search-close-btn">✕</button>
+            </div>
+            <div class="search-hint" id="search-hint">search by keyword — only message content, not usernames</div>
+            <div class="search-results" id="search-results">
+                <div class="search-empty">type to search</div>
+            </div>
+        </div>
+    </div>
+
+
     <!-- Auth Modal -->
     <div class="modal" id="auth-modal">
         <div class="modal-content" style="max-width:360px;width:90%">
-
-            <!-- LOGIN -->
             <div id="auth-login">
                 <h2>hatchat</h2>
                 <div class="form-group">
@@ -100,8 +176,6 @@
                     no account? <a href="#" id="go-register" style="color:#7c6af7">register</a>
                 </p>
             </div>
-
-            <!-- REGISTER -->
             <div id="auth-register" style="display:none">
                 <h2>create account</h2>
                 <div class="form-group">
@@ -122,38 +196,44 @@
                     have an account? <a href="#" id="go-login" style="color:#7c6af7">log in</a>
                 </p>
             </div>
-
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script>
-    // ── Constants ────────────────────────────────────────────────────────
-    // API always lives on Render — GitHub Pages only serves static HTML.
     const SERVER = 'https://averrgy-github-io.onrender.com';
 
-    // ── State ────────────────────────────────────────────────────────────
     let username = '', userColor = '#FFFFFF', socket;
     let currentPage = 1, isLoading = false;
     let selectedImage = null, isUploading = false, isDndEnabled = false;
     let userColors = {}, replyingTo = null;
 
-    // ── DOM refs ─────────────────────────────────────────────────────────
     const chatMessagesEl   = document.getElementById('chat-messages');
     const chatForm         = document.getElementById('chat-form');
     const chatInput        = document.getElementById('chat-input');
     const onlineUsersEl    = document.getElementById('online-users');
     const connectionStatus = document.getElementById('connection-status');
-    const loadMoreBtn      = document.getElementById('load-more-btn');
     const loadingIndicator = document.getElementById('loading-indicator');
     const dndToggle        = document.getElementById('dnd-toggle');
     const replyPreview     = document.getElementById('reply-preview');
     const replyPreviewText = document.getElementById('reply-preview-text');
     const replyCancelBtn   = document.getElementById('reply-cancel-btn');
     const authModal        = document.getElementById('auth-modal');
-    const notificationSound = new Audio('/public/sounds/notif.mp3');
 
-    // ── Emoji shortcuts ──────────────────────────────────────────────────
+    // Notification sound
+    const notifSound = new Audio('/public/sounds/notif.mp3');
+    notifSound.onerror = () => { /* try wav fallback */
+        const wav = new Audio('/public/sounds/notif.wav');
+        wav.onerror = () => {};
+        notifSound.src = '/public/sounds/notif.wav';
+    };
+
+    function playNotifSound() {
+        if (isDndEnabled) return;
+        if (document.hasFocus()) return; // only play when tab not focused
+        try { notifSound.currentTime = 0; notifSound.play().catch(()=>{}); } catch(_) {}
+    }
+
     const emojiMap = {
         ':smile:':'🙂',':heart:':'❤️',':tongue:':'👅',':green_square:':'🟩',
         ':anatomical_heart:':'🫀 (ANATOMICAL HEART!!!)',':locomotive:':'🚂',
@@ -161,7 +241,6 @@
     };
     function replaceEmojis(t) { return t.replace(/:\w+:/g, m => emojiMap[m] || m); }
 
-    // ── Reply helpers ────────────────────────────────────────────────────
     function setReply(data) {
         replyingTo = data;
         const preview = data.message
@@ -178,17 +257,101 @@
     }
     replyCancelBtn.addEventListener('click', clearReply);
 
-    // ── Auth flow ────────────────────────────────────────────────────────
+    // ── DND ──────────────────────────────────────────────────────────────
+    // Restore persisted DND state
+    isDndEnabled = localStorage.getItem('hc_dnd') === 'true';
+    document.addEventListener('DOMContentLoaded', () => {
+        dndToggle.checked = isDndEnabled;
+        if (isDndEnabled) document.querySelector('.dnd-toggle-container').classList.add('dnd-active');
+    });
+    dndToggle.addEventListener('change', () => {
+        isDndEnabled = dndToggle.checked;
+        localStorage.setItem('hc_dnd', isDndEnabled);
+        document.querySelector('.dnd-toggle-container').classList.toggle('dnd-active', isDndEnabled);
+        if (socket) socket.emit('dnd_toggle', isDndEnabled);
+    });
+
+
+    // ── Search modal ──────────────────────────────────────────────────────
+    const searchModal   = document.getElementById('search-modal');
+    const searchInput   = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+    const searchHint    = document.getElementById('search-hint');
+    const smKeyword     = document.getElementById('sm-keyword');
+    const smUser        = document.getElementById('sm-user');
+    let searchMode = 'keyword';
+    let searchDebounce = null;
+
+    document.getElementById('search-open-btn').addEventListener('click', () => {
+        searchModal.classList.add('open');
+        searchInput.focus();
+    });
+    document.getElementById('search-close-btn').addEventListener('click', closeSearch);
+    searchModal.addEventListener('click', (e) => { if (e.target === searchModal) closeSearch(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
+
+    function closeSearch() {
+        searchModal.classList.remove('open');
+        searchInput.value = '';
+        searchResults.innerHTML = '<div class="search-empty">type to search</div>';
+    }
+
+    smKeyword.addEventListener('click', () => {
+        searchMode = 'keyword';
+        smKeyword.classList.add('active'); smUser.classList.remove('active');
+        searchHint.textContent = 'search by keyword — only message content, not usernames';
+        searchInput.placeholder = 'search messages…';
+        runSearch();
+    });
+    smUser.addEventListener('click', () => {
+        searchMode = 'user';
+        smUser.classList.add('active'); smKeyword.classList.remove('active');
+        searchHint.textContent = 'search by username — shows all messages from that user, newest first';
+        searchInput.placeholder = 'enter username…';
+        runSearch();
+    });
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(runSearch, 280);
+    });
+
+    async function runSearch() {
+        const q = searchInput.value.trim();
+        if (!q) { searchResults.innerHTML = '<div class="search-empty">type to search</div>'; return; }
+        searchResults.innerHTML = '<div class="search-empty">searching…</div>';
+        try {
+            const param = searchMode === 'user' ? `user=${encodeURIComponent(q)}` : `q=${encodeURIComponent(q)}`;
+            const r = await fetch(`${SERVER}/api/search?${param}`);
+            const d = await r.json();
+            if (!d.success || !d.results.length) {
+                searchResults.innerHTML = '<div class="search-empty">no results</div>'; return;
+            }
+            searchResults.innerHTML = '';
+            d.results.forEach(msg => {
+                const row = document.createElement('div');
+                row.className = 'search-result';
+                const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+                const color = userColors[msg.username] || msg.color || '#aaa';
+                row.innerHTML = `<span class="sr-ts">${ts}</span><span class="sr-user" style="color:${color}">${msg.username}</span><span class="sr-msg">${escHtml(msg.message || '[image]')}</span>`;
+                searchResults.appendChild(row);
+            });
+        } catch(e) {
+            searchResults.innerHTML = `<div class="search-empty">error: ${e.message}</div>`;
+        }
+    }
+
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Auth ──────────────────────────────────────────────────────────────
     const vLogin    = document.getElementById('auth-login');
     const vRegister = document.getElementById('auth-register');
-    function showView(v) {
-        [vLogin, vRegister].forEach(el => el.style.display = 'none');
-        v.style.display = '';
-    }
+    function showView(v) { [vLogin, vRegister].forEach(el => el.style.display = 'none'); v.style.display = ''; }
     document.getElementById('go-register').addEventListener('click', e => { e.preventDefault(); showView(vRegister); });
     document.getElementById('go-login').addEventListener('click',    e => { e.preventDefault(); showView(vLogin); });
 
-    // Login
     document.getElementById('login-btn').addEventListener('click', async () => {
         const u = document.getElementById('login-username').value.trim();
         const p = document.getElementById('login-password').value;
@@ -196,22 +359,14 @@
         err.textContent = '';
         if (!u || !p) { err.textContent = 'fill in all fields'; return; }
         try {
-            const r = await fetch(`${SERVER}/api/login`, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ username: u, password: p })
-            });
+            const r = await fetch(`${SERVER}/api/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p}) });
             const d = await r.json();
             if (!d.success) { err.textContent = d.message; return; }
-            localStorage.setItem('hc_token', d.token);
-            localStorage.setItem('chat_username', d.username);
-            localStorage.setItem('chat_color', d.color);
-            authModal.style.display = 'none';
-            username = d.username; userColor = d.color;
-            initializeChat(d.color);
+            localStorage.setItem('hc_token', d.token); localStorage.setItem('chat_username', d.username); localStorage.setItem('chat_color', d.color);
+            authModal.style.display = 'none'; username = d.username; userColor = d.color; initializeChat(d.color);
         } catch(e) { err.textContent = 'server error — try again'; }
     });
 
-    // Register — creates account and logs in immediately, no email needed
     document.getElementById('reg-btn').addEventListener('click', async () => {
         const u = document.getElementById('reg-username').value.trim();
         const p = document.getElementById('reg-password').value;
@@ -220,166 +375,101 @@
         err.textContent = '';
         if (!u || !p) { err.textContent = 'fill in all fields'; return; }
         try {
-            const r = await fetch(`${SERVER}/api/register`, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ username: u, password: p, color: c })
-            });
+            const r = await fetch(`${SERVER}/api/register`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p,color:c}) });
             const d = await r.json();
             if (!d.success) { err.textContent = d.message; return; }
-            // Registration returns a token — log straight in
-            localStorage.setItem('hc_token', d.token);
-            localStorage.setItem('chat_username', d.username);
-            localStorage.setItem('chat_color', d.color);
-            authModal.style.display = 'none';
-            username = d.username; userColor = d.color;
-            initializeChat(d.color);
+            localStorage.setItem('hc_token', d.token); localStorage.setItem('chat_username', d.username); localStorage.setItem('chat_color', d.color);
+            authModal.style.display = 'none'; username = d.username; userColor = d.color; initializeChat(d.color);
         } catch(e) { err.textContent = 'server error — try again'; }
     });
 
-    // Enter key support for login/register
     ['login-password','login-username'].forEach(id => {
         document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
     });
 
-    // ── Boot: try stored token, else show modal ──────────────────────────
     window.addEventListener('DOMContentLoaded', async () => {
-        const token    = localStorage.getItem('hc_token');
-        const storedUser  = localStorage.getItem('chat_username');
-        const storedColor = localStorage.getItem('chat_color') || '#FFFFFF';
-
+        const token = localStorage.getItem('hc_token');
+        const storedUser = localStorage.getItem('chat_username');
         if (token) {
             try {
                 const r = await fetch(`${SERVER}/api/me?token=${token}`);
                 const d = await r.json();
                 if (d.success) {
-                    // Valid session — skip the modal entirely
-                    username  = d.username;
-                    userColor = d.color;
-                    localStorage.setItem('chat_username', d.username);
-                    localStorage.setItem('chat_color', d.color);
-                    authModal.style.display = 'none';
-                    initializeChat(d.color);
-                    return;
+                    username = d.username; userColor = d.color;
+                    localStorage.setItem('chat_username', d.username); localStorage.setItem('chat_color', d.color);
+                    authModal.style.display = 'none'; initializeChat(d.color); return;
                 }
             } catch(e) {}
         }
-
-        // Fallback: if we have a stored username (old-style pre-accounts), auto-fill the login
         if (storedUser) document.getElementById('login-username').value = storedUser;
         authModal.style.display = 'flex';
     });
 
 
-    // ── initializeChat ───────────────────────────────────────────────────
+    // ── initializeChat ────────────────────────────────────────────────────
     function initializeChat(color) {
-        socket = io(SERVER, {
-            query: { username, color },
-            reconnection: true, reconnectionAttempts: 5,
-            reconnectionDelay: 1000, reconnectionDelayMax: 5000
-        });
+        socket = io(SERVER, { query: { username, color }, reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
 
         socket.on('connect', () => {
-            connectionStatus.textContent = 'Connected';
-            connectionStatus.style.color = '#4CAF50';
+            connectionStatus.textContent = 'Connected'; connectionStatus.style.color = '#4CAF50';
             socket.emit('user_join', { username });
-            loadMessages(1);
-            loadAllUsers(); // populate the full user panel
+            loadMessages(1); loadAllUsers();
         });
-        socket.on('disconnect', () => {
-            connectionStatus.textContent = 'Disconnected';
-            connectionStatus.style.color = '#ff6b6b';
-        });
+        socket.on('disconnect', () => { connectionStatus.textContent = 'Disconnected'; connectionStatus.style.color = '#ff6b6b'; });
 
         socket.on('chat_message', (data) => {
             displayMessage(data.username, data.message, data.timestamp, data.color, data.image, data.replyTo);
-            // Notify if message is from someone else and page is not focused
-            if (data.username !== username && window.hcNotify) {
-                const preview = data.message ? data.message.substring(0, 50) : '[image]';
-                window.hcNotify(`💬 ${data.username}: ${preview}`);
+            if (data.username !== username) {
+                if (!isDndEnabled) {
+                    const preview = data.message ? data.message.substring(0, 50) : '[image]';
+                    if (window.hcNotify) window.hcNotify(`💬 ${data.username}: ${preview}`);
+                    playNotifSound();
+                }
             }
         });
+
         socket.on('scroll_to_latest', () => { chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; });
 
         socket.on('chat_history', (data) => {
-            loadingIndicator.style.display = 'none';
-            isLoading = false;
+            loadingIndicator.style.display = 'none'; isLoading = false;
             if (data.userColors) userColors = data.userColors;
-            if (currentPage === 1) { chatMessagesEl.innerHTML = ''; }
-
-            const messagesArray = [];
-            data.messages.forEach((msg, index) => {
-                if (msg.type === 'system') {
-                    messagesArray.push(createSystemMessageElement(msg.message));
-                } else {
-                    let isCont = false;
-                    if (currentPage > 1 && index > 0 && !msg.replyTo) {
-                        const prev = data.messages[index - 1];
-                        isCont = prev.type !== 'system' && prev.username === msg.username;
-                    }
-                    messagesArray.push(createMessageElement(
-                        msg.username, msg.message, msg.timestamp,
-                        isCont, msg.color || userColors[msg.username], msg.image, msg.replyTo
-                    ));
+            if (currentPage === 1) chatMessagesEl.innerHTML = '';
+            const msgs = [];
+            data.messages.forEach((msg, i) => {
+                if (msg.type === 'system') { msgs.push(createSystemMessageElement(msg.message)); return; }
+                let isCont = false;
+                if (currentPage > 1 && i > 0 && !msg.replyTo) {
+                    const prev = data.messages[i-1];
+                    isCont = prev.type !== 'system' && prev.username === msg.username;
                 }
+                msgs.push(createMessageElement(msg.username, msg.message, msg.timestamp, isCont, msg.color || userColors[msg.username], msg.image, msg.replyTo));
             });
-
-            if (currentPage === 1) {
-                messagesArray.reverse();
-                recalcContinuations(messagesArray);
-            } else {
-                recalcContinuations(messagesArray);
-            }
-
+            if (currentPage === 1) { msgs.reverse(); recalcContinuations(msgs); } else recalcContinuations(msgs);
             const frag = document.createDocumentFragment();
-            messagesArray.forEach(el => frag.appendChild(el));
-            if (currentPage === 1) {
-                chatMessagesEl.appendChild(frag);
-                chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-            } else {
-                chatMessagesEl.insertBefore(frag, chatMessagesEl.firstChild);
-            }
-            loadMoreBtn.disabled = (data.messages.length < 20);
+            msgs.forEach(el => frag.appendChild(el));
+            if (currentPage === 1) { chatMessagesEl.appendChild(frag); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
+            else chatMessagesEl.insertBefore(frag, chatMessagesEl.firstChild);
         });
 
-        socket.on('user_join',  (data) => {
-            displaySystemMessage(`${data.username} has joined the chat`);
-            if (data.userColors) userColors = data.userColors;
-            loadAllUsers();
-        });
-        socket.on('user_leave', (data) => {
-            displaySystemMessage(`${data.username} has left the chat`);
-            if (data.userColors) userColors = data.userColors;
-            loadAllUsers();
-        });
-        socket.on('update_users',    () => loadAllUsers());
-        socket.on('refresh_all_users', () => loadAllUsers());
-        socket.on('update_colors', (data) => {
-            if (data.userColors) { userColors = data.userColors; updateDisplayedColors(); }
-        });
+        socket.on('user_join',  (data) => { displaySystemMessage(`${data.username} has joined the chat`); if (data.userColors) userColors = data.userColors; loadAllUsers(); });
+        socket.on('user_leave', (data) => { displaySystemMessage(`${data.username} has left the chat`);  if (data.userColors) userColors = data.userColors; loadAllUsers(); });
+        socket.on('update_users',     () => loadAllUsers());
+        socket.on('refresh_all_users',() => loadAllUsers());
+        socket.on('update_colors', (data) => { if (data.userColors) { userColors = data.userColors; updateDisplayedColors(); } });
         socket.on('user_renamed', (data) => {
-            // Update any rendered message that used the old username
             document.querySelectorAll('.message-sender').forEach(el => {
-                if (el.getAttribute('data-sender') === data.oldUsername) {
-                    el.setAttribute('data-sender', data.newUsername);
-                    el.textContent = data.newUsername;
-                }
+                if (el.getAttribute('data-sender') === data.oldUsername) { el.setAttribute('data-sender', data.newUsername); el.textContent = data.newUsername; }
             });
-            // If we are the renamed user, update our local state too
-            if (username === data.oldUsername) {
-                username = data.newUsername;
-                localStorage.setItem('chat_username', data.newUsername);
-            }
+            if (username === data.oldUsername) { username = data.newUsername; localStorage.setItem('chat_username', data.newUsername); }
             loadAllUsers();
         });
+        // Hard reload when server tells us to (profile update or new clip)
+        socket.on('force_reload', () => { setTimeout(() => location.reload(), 800); });
 
-        loadMoreBtn.addEventListener('click', () => {
-            if (!isLoading) { currentPage++; loadMessages(currentPage); }
-        });
-        document.getElementById('color-input') && document.getElementById('color-input').addEventListener('change', (e) => {
-            socket.emit('update_color', { color: e.target.value });
-        });
         dndToggle.addEventListener('change', () => {
             isDndEnabled = dndToggle.checked;
+            localStorage.setItem('hc_dnd', isDndEnabled);
+            document.querySelector('.dnd-toggle-container').classList.toggle('dnd-active', isDndEnabled);
             socket.emit('dnd_toggle', isDndEnabled);
         });
 
@@ -391,99 +481,67 @@
             for (const item of items) {
                 if (item.type.indexOf('image') !== -1) {
                     const file = item.getAsFile();
-                    if (file.size > 5 * 1024 * 1024) { alert('Pasted image is too large. Max 5MB.'); return; }
-                    selectedImage = file;
-                    chatInput.placeholder = 'Image pasted. Type a caption and send.';
-                    showImagePreview(file);
-                    e.preventDefault();
-                    return;
+                    if (file.size > 5*1024*1024) { alert('Pasted image too large. Max 5MB.'); return; }
+                    selectedImage = file; chatInput.placeholder = 'Image pasted. Type a caption and send.';
+                    showImagePreview(file); e.preventDefault(); return;
                 }
             }
         });
 
         chatInput.addEventListener('input', () => {
             const pos = chatInput.selectionStart;
-            const before = chatInput.value.slice(0, pos);
-            const after  = chatInput.value.slice(pos);
+            const before = chatInput.value.slice(0, pos), after = chatInput.value.slice(pos);
             const nb = replaceEmojis(before);
             chatInput.value = nb + after;
             chatInput.selectionStart = chatInput.selectionEnd = nb.length;
         });
     }
 
-
-    // ── All-users panel (online + offline registered accounts) ───────────
+    // ── Users panel ───────────────────────────────────────────────────────
     async function loadAllUsers() {
-        try {
-            const r = await fetch(`${SERVER}/api/all-users`);
-            const d = await r.json();
-            if (!d.success) return;
-            renderAllUsers(d.users);
-        } catch(e) {}
+        try { const r = await fetch(`${SERVER}/api/all-users`); const d = await r.json(); if (d.success) renderAllUsers(d.users); } catch(e) {}
     }
-
-    function renderAllUsers(allUsers) {
+    function renderAllUsers(all) {
         onlineUsersEl.innerHTML = '';
-        const online  = allUsers.filter(u => u.online);
-        const offline = allUsers.filter(u => !u.online);
-
+        const online = all.filter(u => u.online), offline = all.filter(u => !u.online);
         online.forEach(u => {
-            const item = document.createElement('div');
-            item.className = 'user-item';
+            const item = document.createElement('div'); item.className = 'user-item';
             const dot = document.createElement('span');
-            dot.className = 'user-dot'; // green via CSS
+            dot.className = isDndEnabled && u.username === username ? 'user-dot dnd-dot' : 'user-dot';
+            if (isDndEnabled && u.username === username) dot.style.backgroundColor = '#cf4444';
             const label = document.createElement('span');
-            label.textContent = u.username;
-            label.style.color = u.color || userColors[u.username] || '#e0e0e0';
-            item.appendChild(dot); item.appendChild(label);
-            onlineUsersEl.appendChild(item);
+            label.textContent = u.username; label.style.color = u.color || userColors[u.username] || '#e0e0e0';
+            item.appendChild(dot); item.appendChild(label); onlineUsersEl.appendChild(item);
         });
-
-        if (offline.length > 0) {
-            const divider = document.createElement('div');
-            divider.className = 'offline-divider';
-            divider.textContent = '── offline ──';
-            onlineUsersEl.appendChild(divider);
-
+        if (offline.length) {
+            const div = document.createElement('div'); div.className = 'offline-divider'; div.textContent = '── offline ──'; onlineUsersEl.appendChild(div);
             offline.forEach(u => {
-                const item = document.createElement('div');
-                item.className = 'user-item user-offline';
-                const dot = document.createElement('span');
-                dot.className = 'user-dot user-dot-offline'; // grey
-                const label = document.createElement('span');
-                label.textContent = u.username;
-                label.style.color = '#555';
-                item.appendChild(dot); item.appendChild(label);
-                onlineUsersEl.appendChild(item);
+                const item = document.createElement('div'); item.className = 'user-item user-offline';
+                const dot = document.createElement('span'); dot.className = 'user-dot user-dot-offline';
+                const label = document.createElement('span'); label.textContent = u.username; label.style.color = '#555';
+                item.appendChild(dot); item.appendChild(label); onlineUsersEl.appendChild(item);
             });
         }
     }
 
-    // ── Message helpers ──────────────────────────────────────────────────
+
+    // ── Message helpers ───────────────────────────────────────────────────
     function recalcContinuations(elements) {
-        const GAP_MS = 5 * 60 * 1000;
-        let prevSender = null, prevTs = null;
+        const GAP_MS = 5*60*1000; let prevSender=null, prevTs=null;
         elements.forEach(el => {
-            if (el.classList.contains('system-message')) { prevSender = null; prevTs = null; return; }
-            const sEl = el.querySelector('.message-sender');
-            if (!sEl) return;
-            const sender   = sEl.getAttribute('data-sender');
-            const hasReply = !!el.querySelector('.reply-thread');
-            const tsRaw    = el.getAttribute('data-ts');
-            const ts       = tsRaw ? parseInt(tsRaw, 10) : null;
-            const sameUser = prevSender === sender;
-            const smallGap = (ts && prevTs) ? (ts - prevTs) < GAP_MS : true;
-            const isCont   = sameUser && smallGap && !hasReply;
+            if (el.classList.contains('system-message')) { prevSender=null; prevTs=null; return; }
+            const sEl = el.querySelector('.message-sender'); if (!sEl) return;
+            const sender = sEl.getAttribute('data-sender'), hasReply = !!el.querySelector('.reply-thread');
+            const tsRaw = el.getAttribute('data-ts'), ts = tsRaw ? parseInt(tsRaw,10) : null;
+            const isCont = prevSender===sender && (!ts||!prevTs||(ts-prevTs)<GAP_MS) && !hasReply;
             el.classList.toggle('continued-message', isCont);
-            prevSender = sender; prevTs = ts || prevTs;
+            prevSender=sender; prevTs=ts||prevTs;
         });
     }
 
     function loadMessages(page) {
-        if (isLoading) return;
-        isLoading = true;
-        loadingIndicator.textContent = 'Loading messages...';
-        loadingIndicator.style.display = 'flex';
+        if (isLoading) return; isLoading = true;
+        loadingIndicator.textContent = 'Loading messages...'; loadingIndicator.style.display = 'flex';
         socket.emit('load_messages', { page });
     }
 
@@ -493,327 +551,152 @@
         if (isContinuation) div.classList.add('continued-message');
         if (replyTo) div.classList.add('is-reply');
         if (timestamp) div.setAttribute('data-ts', new Date(timestamp).getTime());
-
         const msgColor = color || userColors[sender] || null;
-
-        const usernameArea = document.createElement('div');
-        usernameArea.className = 'username-area';
-        const senderEl = document.createElement('span');
-        senderEl.className = 'message-sender';
-        senderEl.setAttribute('data-sender', sender);
-        senderEl.textContent = sender;
-        if (msgColor) senderEl.style.color = msgColor;
-        senderEl.style.cursor = 'pointer';
-        senderEl.addEventListener('click', e => { e.stopPropagation(); setReply({ username: sender, message: message || '', color: msgColor }); });
-        const sep = document.createElement('span');
-        sep.className = 'message-separator'; sep.textContent = ' ~ ';
+        const usernameArea = document.createElement('div'); usernameArea.className = 'username-area';
+        const senderEl = document.createElement('span'); senderEl.className = 'message-sender';
+        senderEl.setAttribute('data-sender', sender); senderEl.textContent = sender;
+        if (msgColor) senderEl.style.color = msgColor; senderEl.style.cursor = 'pointer';
+        senderEl.addEventListener('click', e => { e.stopPropagation(); setReply({ username: sender, message: message||'', color: msgColor }); });
+        const sep = document.createElement('span'); sep.className = 'message-separator'; sep.textContent = ' ~ ';
         usernameArea.appendChild(senderEl); usernameArea.appendChild(sep);
-
-        const content = document.createElement('div');
-        content.className = 'message-content';
-        if (msgColor) content.style.color = msgColor;
-        content.style.cursor = 'pointer';
-        content.title = 'Click to reply';
-        content.addEventListener('click', () => setReply({ username: sender, message: message || '', color: msgColor }));
-
+        const content = document.createElement('div'); content.className = 'message-content';
+        if (msgColor) content.style.color = msgColor; content.style.cursor = 'pointer'; content.title = 'Click to reply';
+        content.addEventListener('click', () => setReply({ username: sender, message: message||'', color: msgColor }));
         if (replyTo) {
             const replyLineColor = replyTo.color || userColors[replyTo.username] || '#555';
-            const thread = document.createElement('div');
-            thread.className = 'reply-thread';
-            thread.style.setProperty('--thread-color', replyLineColor);
-            const refLine = document.createElement('div');
-            refLine.className = 'reply-ref';
-            const refAuthor = document.createElement('span');
-            refAuthor.className = 'reply-ref-author'; refAuthor.textContent = replyTo.username; refAuthor.style.color = replyLineColor;
-            const refText = document.createElement('span');
-            refText.className = 'reply-ref-text';
-            const raw = replyTo.message || '[image]';
-            refText.textContent = ': ' + (raw.length > 55 ? raw.substring(0,55)+'…' : raw);
+            const thread = document.createElement('div'); thread.className = 'reply-thread'; thread.style.setProperty('--thread-color', replyLineColor);
+            const refLine = document.createElement('div'); refLine.className = 'reply-ref';
+            const refAuthor = document.createElement('span'); refAuthor.className = 'reply-ref-author'; refAuthor.textContent = replyTo.username; refAuthor.style.color = replyLineColor;
+            const refText = document.createElement('span'); refText.className = 'reply-ref-text';
+            const raw = replyTo.message || '[image]'; refText.textContent = ': ' + (raw.length>55?raw.substring(0,55)+'…':raw);
             refLine.appendChild(refAuthor); refLine.appendChild(refText);
-            const replyBody = document.createElement('div');
-            replyBody.className = 'reply-body';
+            const replyBody = document.createElement('div'); replyBody.className = 'reply-body';
             if (msgColor) replyBody.style.color = msgColor;
             if (message) replyBody.appendChild(document.createTextNode(message));
             if (image) { const img = makeImg(image); if (message) replyBody.appendChild(document.createElement('br')); replyBody.appendChild(img); }
-            thread.appendChild(refLine); thread.appendChild(replyBody);
-            content.appendChild(thread);
+            thread.appendChild(refLine); thread.appendChild(replyBody); content.appendChild(thread);
         } else {
             if (message) content.appendChild(document.createTextNode(message));
             if (image) { const img = makeImg(image); if (message) content.appendChild(document.createElement('br')); content.appendChild(img); }
         }
-
         div.appendChild(usernameArea); div.appendChild(content);
         return div;
     }
 
     function makeImg(src) {
-        const img = document.createElement('img');
-        img.src = src; img.className = 'message-image'; img.alt = 'Shared image';
+        const img = document.createElement('img'); img.src = src; img.className = 'message-image'; img.alt = 'Shared image';
         img.onerror = () => { img.alt = 'Image failed to load'; };
-        img.addEventListener('click', e => { e.stopPropagation(); window.open(src, '_blank'); });
+        img.addEventListener('click', e => { e.stopPropagation(); window.open(src,'_blank'); });
         return img;
     }
-
-    function createSystemMessageElement(message) {
-        const div = document.createElement('div');
-        div.className = 'system-message';
-        div.textContent = message;
-        return div;
-    }
-
+    function createSystemMessageElement(msg) { const div = document.createElement('div'); div.className = 'system-message'; div.textContent = msg; return div; }
     function displayMessage(sender, message, timestamp, color, image=null, replyTo=null) {
-        const allMsgs = chatMessagesEl.querySelectorAll('.message:not(.system-message)');
-        let lastDOMSender = null;
-        if (allMsgs.length > 0) {
-            const sEl = allMsgs[allMsgs.length-1].querySelector('.message-sender');
-            if (sEl) lastDOMSender = sEl.getAttribute('data-sender');
-        }
+        const allMsgs = chatMessagesEl.querySelectorAll('.message'); let lastDOMSender = null;
+        if (allMsgs.length) { const sEl = allMsgs[allMsgs.length-1].querySelector('.message-sender'); if (sEl) lastDOMSender = sEl.getAttribute('data-sender'); }
         const lastChild = chatMessagesEl.lastElementChild;
-        const lastIsSystem = lastChild && lastChild.classList.contains('system-message');
-        const isCont = !replyTo && !lastIsSystem && lastDOMSender === sender;
+        const isCont = !replyTo && !(lastChild && lastChild.classList.contains('system-message')) && lastDOMSender === sender;
         const el = createMessageElement(sender, message, timestamp, isCont, color, image, replyTo);
-        chatMessagesEl.appendChild(el);
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+        chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
-
-    function displaySystemMessage(message) {
-        const el = createSystemMessageElement(message);
-        chatMessagesEl.appendChild(el);
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-    }
-
+    function displaySystemMessage(msg) { const el = createSystemMessageElement(msg); chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
     function updateDisplayedColors() {
         document.querySelectorAll('.message').forEach(el => {
-            const sEl = el.querySelector('.message-sender');
-            if (!sEl) return;
+            const sEl = el.querySelector('.message-sender'); if (!sEl) return;
             const s = sEl.getAttribute('data-sender');
-            if (userColors[s]) {
-                sEl.style.color = userColors[s];
-                const c = el.querySelector('.message-content');
-                if (c) c.style.color = userColors[s];
-            }
+            if (userColors[s]) { sEl.style.color = userColors[s]; const c = el.querySelector('.message-content'); if (c) c.style.color = userColors[s]; }
         });
     }
 
-
-    // ── Image upload ─────────────────────────────────────────────────────
+    // ── Image upload ──────────────────────────────────────────────────────
     function showImagePreview(file) {
-        const old = document.getElementById('paste-preview');
-        if (old) old.remove();
-        const reader = new FileReader();
-        reader.onload = e => {
-            const img = document.createElement('img');
-            img.id = 'paste-preview'; img.src = e.target.result;
+        const old = document.getElementById('paste-preview'); if (old) old.remove();
+        const reader = new FileReader(); reader.onload = e => {
+            const img = document.createElement('img'); img.id = 'paste-preview'; img.src = e.target.result;
             img.style.cssText = 'max-width:120px;max-height:80px;margin:4px 8px 0;display:block;';
             chatForm.parentNode.insertBefore(img, chatForm);
-        };
-        reader.readAsDataURL(file);
+        }; reader.readAsDataURL(file);
     }
 
     function setupImageUpload() {
         const imageUpload = document.getElementById('image-upload');
         imageUpload.addEventListener('change', e => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const file = e.target.files[0]; if (!file) return;
             if (!file.type.startsWith('image/')) { alert('Please select an image file.'); imageUpload.value=''; return; }
-            if (file.size > 5*1024*1024) { alert('Image must be under 5 MB.'); imageUpload.value=''; return; }
-            selectedImage = file;
-            chatInput.placeholder = `Image "${file.name}" selected. Type a caption and send.`;
+            if (file.size>5*1024*1024) { alert('Image must be under 5 MB.'); imageUpload.value=''; return; }
+            selectedImage = file; chatInput.placeholder = `Image "${file.name}" selected. Type a caption and send.`;
         });
-
         chatForm.addEventListener('submit', async e => {
             e.preventDefault();
             let message = replaceEmojis(chatInput.value.trim());
-            if (!message && !selectedImage) return;
-            if (!socket || isUploading) return;
-            const currentReply = replyingTo ? { ...replyingTo } : null;
-
-            const pastePreview = document.getElementById('paste-preview');
-            if (pastePreview) pastePreview.remove();
-
+            if (!message && !selectedImage) return; if (!socket || isUploading) return;
+            const currentReply = replyingTo ? {...replyingTo} : null;
+            const pastePreview = document.getElementById('paste-preview'); if (pastePreview) pastePreview.remove();
             if (selectedImage) {
-                isUploading = true;
-                const loader = document.createElement('div');
-                loader.className = 'image-loader';
-                chatForm.appendChild(loader);
-                const formData = new FormData();
-                formData.append('image', selectedImage);
+                isUploading = true; const loader = document.createElement('div'); loader.className = 'image-loader'; chatForm.appendChild(loader);
+                const formData = new FormData(); formData.append('image', selectedImage);
                 try {
-                    const response = await fetch(`${SERVER}/upload`, { method: 'POST', body: formData });
+                    const response = await fetch(`${SERVER}/upload`, { method:'POST', body:formData });
                     if (!response.ok) throw new Error(`Server ${response.status}`);
                     const result = await response.json();
-                    if (result.success) {
-                        let imgPath = result.filePath;
-                        if (imgPath && !imgPath.startsWith('http')) imgPath = SERVER + (imgPath.startsWith('/') ? '' : '/') + imgPath;
-                        socket.emit('chat_message', { message, image: imgPath, replyTo: currentReply });
-                    } else { alert('Upload failed: ' + (result.message || 'unknown')); }
-                } catch(err) { alert('Upload error: ' + err.message); }
-                finally {
-                    isUploading = false; selectedImage = null;
-                    chatInput.placeholder = 'Type your message...';
-                    chatForm.removeChild(loader);
-                }
-            } else {
-                socket.emit('chat_message', { message, replyTo: currentReply });
-            }
-
-            chatInput.value = '';
-            imageUpload.value = '';
-            chatInput.focus();
-            clearReply();
+                    if (result.success) { let imgPath = result.filePath; if (imgPath&&!imgPath.startsWith('http')) imgPath=SERVER+(imgPath.startsWith('/')?'':'/')+imgPath; socket.emit('chat_message',{message,image:imgPath,replyTo:currentReply}); }
+                    else alert('Upload failed: '+(result.message||'unknown'));
+                } catch(err) { alert('Upload error: '+err.message); }
+                finally { isUploading=false; selectedImage=null; chatInput.placeholder='Type your message...'; chatForm.removeChild(loader); }
+            } else { socket.emit('chat_message', { message, replyTo: currentReply }); }
+            chatInput.value=''; imageUpload.value=''; chatInput.focus(); clearReply();
         });
     }
 
-    // ── Voice Chat ───────────────────────────────────────────────────────
+
+    // ── Voice ─────────────────────────────────────────────────────────────
     function initVoice() {
-        const joinBtn    = document.getElementById('voice-join-btn');
-        const membersEl  = document.getElementById('voice-members');
-        const controlsEl = document.getElementById('voice-controls');
-        const muteBtn    = document.getElementById('voice-mute-btn');
-        const deafBtn    = document.getElementById('voice-deaf-btn');
-
-        let inVoice = false, isMuted = false, isDeafened = false;
-        let localStream = null;
-        const peers    = {};
-        const audioEls = {};
-        let voiceMembers = {};
-
-        const iceConfig = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        };
+        const joinBtn=document.getElementById('voice-join-btn'), membersEl=document.getElementById('voice-members');
+        const controlsEl=document.getElementById('voice-controls'), muteBtn=document.getElementById('voice-mute-btn'), deafBtn=document.getElementById('voice-deaf-btn');
+        let inVoice=false, isMuted=false, isDeafened=false, localStream=null;
+        const peers={}, audioEls={};
+        let voiceMembers={};
+        const iceConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
         function renderMembers() {
-            membersEl.innerHTML = '';
-            if (inVoice) {
-                const self = document.createElement('div');
-                self.className = 'voice-member self';
-                self.innerHTML = `<span class="voice-member-icon">${isMuted ? '🔇' : '🎙'}</span><span>${username} <span style="color:#555;font-size:.65em">(you)</span></span>`;
-                membersEl.appendChild(self);
-            }
-            Object.values(voiceMembers).forEach(({ username: u, muted }) => {
-                const div = document.createElement('div');
-                div.className = 'voice-member';
-                div.innerHTML = `<span class="voice-member-icon">${muted ? '🔇' : '🎙'}</span><span>${u}</span>`;
-                membersEl.appendChild(div);
-            });
+            membersEl.innerHTML='';
+            if (inVoice) { const s=document.createElement('div'); s.className='voice-member self'; s.innerHTML=`<span class="voice-member-icon">${isMuted?'🔇':'🎙'}</span><span>${username} <span style="color:#555;font-size:.65em">(you)</span></span>`; membersEl.appendChild(s); }
+            Object.values(voiceMembers).forEach(({username:u,muted})=>{ const d=document.createElement('div'); d.className='voice-member'; d.innerHTML=`<span class="voice-member-icon">${muted?'🔇':'🎙'}</span><span>${u}</span>`; membersEl.appendChild(d); });
         }
-
         async function joinVoice() {
-            try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
-            catch(e) { alert('Microphone access denied: ' + e.message); return; }
-            inVoice = true;
-            joinBtn.textContent = 'leave'; joinBtn.classList.add('active');
-            controlsEl.style.display = 'flex';
-            renderMembers();
-            socket.emit('voice_join', { username });
+            try { localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false}); } catch(e) { alert('Microphone denied: '+e.message); return; }
+            inVoice=true; joinBtn.textContent='leave'; joinBtn.classList.add('active'); controlsEl.style.display='flex'; renderMembers(); socket.emit('voice_join',{username});
         }
-
         function leaveVoice() {
-            socket.emit('voice_leave', { username });
-            if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-            Object.values(peers).forEach(pc => pc.close());
-            Object.keys(peers).forEach(id => delete peers[id]);
-            Object.values(audioEls).forEach(a => { a.srcObject = null; a.remove(); });
-            Object.keys(audioEls).forEach(id => delete audioEls[id]);
-            voiceMembers = {};
-            inVoice = false; isMuted = false; isDeafened = false;
-            joinBtn.textContent = 'join'; joinBtn.classList.remove('active');
-            controlsEl.style.display = 'none';
-            muteBtn.classList.remove('active'); deafBtn.classList.remove('active');
-            muteBtn.textContent = '🎤 mute'; deafBtn.textContent = '🔇 deafen';
-            renderMembers();
+            socket.emit('voice_leave',{username}); if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+            Object.values(peers).forEach(pc=>pc.close()); Object.keys(peers).forEach(id=>delete peers[id]);
+            Object.values(audioEls).forEach(a=>{a.srcObject=null;a.remove();}); Object.keys(audioEls).forEach(id=>delete audioEls[id]);
+            voiceMembers={}; inVoice=false; isMuted=false; isDeafened=false;
+            joinBtn.textContent='join'; joinBtn.classList.remove('active'); controlsEl.style.display='none';
+            muteBtn.classList.remove('active'); deafBtn.classList.remove('active'); muteBtn.textContent='🎤 mute'; deafBtn.textContent='🔇 deafen'; renderMembers();
         }
+        joinBtn.addEventListener('click', ()=>inVoice?leaveVoice():joinVoice());
+        muteBtn.addEventListener('click', ()=>{ isMuted=!isMuted; if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted); muteBtn.classList.toggle('active',isMuted); muteBtn.textContent=isMuted?'🎤 unmute':'🎤 mute'; socket.emit('voice_mute',{muted:isMuted}); renderMembers(); });
+        deafBtn.addEventListener('click', ()=>{ isDeafened=!isDeafened; Object.values(audioEls).forEach(a=>a.muted=isDeafened); deafBtn.classList.toggle('active',isDeafened); deafBtn.textContent=isDeafened?'🔇 undeafen':'🔇 deafen'; });
 
-        joinBtn.addEventListener('click', () => inVoice ? leaveVoice() : joinVoice());
-
-        muteBtn.addEventListener('click', () => {
-            isMuted = !isMuted;
-            if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
-            muteBtn.classList.toggle('active', isMuted);
-            muteBtn.textContent = isMuted ? '🎤 unmute' : '🎤 mute';
-            socket.emit('voice_mute', { muted: isMuted });
-            renderMembers();
-        });
-
-        deafBtn.addEventListener('click', () => {
-            isDeafened = !isDeafened;
-            Object.values(audioEls).forEach(a => a.muted = isDeafened);
-            deafBtn.classList.toggle('active', isDeafened);
-            deafBtn.textContent = isDeafened ? '🔇 undeafen' : '🔇 deafen';
-        });
-
-        async function createPeer(remoteId, initiator) {
-            if (peers[remoteId]) return peers[remoteId];
-            const pc = new RTCPeerConnection(iceConfig);
-            peers[remoteId] = pc;
-            if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-            pc.onicecandidate = e => { if (e.candidate) socket.emit('voice_ice', { to: remoteId, candidate: e.candidate }); };
-            pc.ontrack = e => {
-                let audio = audioEls[remoteId];
-                if (!audio) {
-                    audio = document.createElement('audio');
-                    audio.autoplay = true; audio.muted = isDeafened; audio.style.display = 'none';
-                    document.body.appendChild(audio); audioEls[remoteId] = audio;
-                }
-                if (e.streams && e.streams[0]) { audio.srcObject = e.streams[0]; audio.play().catch(()=>{}); }
-            };
-            pc.onnegotiationneeded = async () => {
-                if (initiator) {
-                    try {
-                        const offer = await pc.createOffer();
-                        await pc.setLocalDescription(offer);
-                        socket.emit('voice_offer', { to: remoteId, offer: pc.localDescription });
-                    } catch(e) { console.error('Offer error:', e); }
-                }
-            };
+        async function createPeer(remoteId,initiator) {
+            if(peers[remoteId])return peers[remoteId];
+            const pc=new RTCPeerConnection(iceConfig); peers[remoteId]=pc;
+            if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+            pc.onicecandidate=e=>{if(e.candidate)socket.emit('voice_ice',{to:remoteId,candidate:e.candidate});};
+            pc.ontrack=e=>{ let audio=audioEls[remoteId]; if(!audio){audio=document.createElement('audio');audio.autoplay=true;audio.muted=isDeafened;audio.style.display='none';document.body.appendChild(audio);audioEls[remoteId]=audio;} if(e.streams&&e.streams[0]){audio.srcObject=e.streams[0];audio.play().catch(()=>{});} };
+            pc.onnegotiationneeded=async()=>{ if(initiator){try{const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('voice_offer',{to:remoteId,offer:pc.localDescription});}catch(e){console.error('Offer error:',e);}} };
             return pc;
         }
-
-        socket.on('voice_user_joined', async ({ socketId, username: u }) => {
-            voiceMembers[socketId] = { username: u, muted: false }; renderMembers();
-            if (inVoice) await createPeer(socketId, true);
-        });
-        socket.on('voice_current_members', async (members) => {
-            members.forEach(({ socketId, username: u }) => { voiceMembers[socketId] = { username: u, muted: false }; });
-            renderMembers();
-            for (const { socketId } of members) await createPeer(socketId, false);
-        });
-        socket.on('voice_offer', async ({ from, offer }) => {
-            let pc = peers[from]; if (!pc) pc = await createPeer(from, false);
-            try {
-                await pc.setRemoteDescription(new RTCSessionDescription(offer));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                socket.emit('voice_answer', { to: from, answer: pc.localDescription });
-            } catch(e) { console.error('voice_offer error:', e); }
-        });
-        socket.on('voice_answer', async ({ from, answer }) => {
-            const pc = peers[from];
-            if (pc && pc.signalingState !== 'stable') {
-                try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); } catch(e) {}
-            }
-        });
-        socket.on('voice_ice', async ({ from, candidate }) => {
-            const pc = peers[from];
-            if (pc && pc.remoteDescription) { try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {} }
-        });
-        socket.on('voice_user_left', ({ socketId }) => {
-            if (peers[socketId]) { peers[socketId].close(); delete peers[socketId]; }
-            if (audioEls[socketId]) { audioEls[socketId].srcObject = null; audioEls[socketId].remove(); delete audioEls[socketId]; }
-            delete voiceMembers[socketId]; renderMembers();
-        });
-        socket.on('voice_mute_update', ({ socketId, muted }) => {
-            if (voiceMembers[socketId]) { voiceMembers[socketId].muted = muted; renderMembers(); }
-        });
+        socket.on('voice_user_joined',async({socketId,username:u})=>{ voiceMembers[socketId]={username:u,muted:false}; renderMembers(); if(inVoice)await createPeer(socketId,true); });
+        socket.on('voice_current_members',async(members)=>{ members.forEach(({socketId,username:u})=>{voiceMembers[socketId]={username:u,muted:false};}); renderMembers(); for(const{socketId}of members)await createPeer(socketId,false); });
+        socket.on('voice_offer',async({from,offer})=>{ let pc=peers[from]; if(!pc)pc=await createPeer(from,false); try{await pc.setRemoteDescription(new RTCSessionDescription(offer));const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('voice_answer',{to:from,answer:pc.localDescription});}catch(e){console.error('voice_offer:',e);} });
+        socket.on('voice_answer',async({from,answer})=>{ const pc=peers[from]; if(pc&&pc.signalingState!=='stable'){try{await pc.setRemoteDescription(new RTCSessionDescription(answer));}catch(e){}} });
+        socket.on('voice_ice',async({from,candidate})=>{ const pc=peers[from]; if(pc&&pc.remoteDescription){try{await pc.addIceCandidate(new RTCIceCandidate(candidate));}catch(e){}} });
+        socket.on('voice_user_left',({socketId})=>{ if(peers[socketId]){peers[socketId].close();delete peers[socketId];} if(audioEls[socketId]){audioEls[socketId].srcObject=null;audioEls[socketId].remove();delete audioEls[socketId];} delete voiceMembers[socketId]; renderMembers(); });
+        socket.on('voice_mute_update',({socketId,muted})=>{ if(voiceMembers[socketId]){voiceMembers[socketId].muted=muted;renderMembers();} });
     }
 
-    // ── PWA service worker ───────────────────────────────────────────────
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
     </script>
 </body>
 </html>
