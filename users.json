@@ -20,5 +20,13 @@
       "1eb129eab4c3c87b337b9ed0a0161aee81bb47155f9e66c27aba48202d4d6561",
       "17f2c4e142ff5bf3a755a4c78ee7de3955335d77a412b3bb794dee7bbda691e6"
     ]
+  },
+  "vixian": {
+    "username": "Vixian",
+    "passwordHash": "$2a$10$yWQEiGPv0cHLYQRGldc/..mTX605jmU9IQrsqyTSlIRiZ6pgk6oA2",
+    "color": "#ff06ff",
+    "sessionTokens": [
+      "9169cf0bb6ccfad97148c5a22e46853ec9188bef869ab2b0ca5c013c95ac34e6"
+    ]
   }
 }
