@@ -389,22 +389,42 @@
         document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
     });
 
+    // Fetch with a timeout — prevents hanging forever when Render is cold-starting
+    async function fetchWithTimeout(url, opts = {}, ms = 12000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ms);
+        try {
+            return await fetch(url, { ...opts, signal: controller.signal });
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
     window.addEventListener('DOMContentLoaded', async () => {
         const token = localStorage.getItem('hc_token');
         const storedUser = localStorage.getItem('chat_username');
         if (token) {
+            // Show a gentle status message in case the server is waking up
+            connectionStatus.textContent = 'Server waking up…';
+            connectionStatus.style.color = '#f0a04b';
             try {
-                const r = await fetch(`${SERVER}/api/me?token=${token}`);
+                const r = await fetchWithTimeout(`${SERVER}/api/me?token=${token}`, {}, 15000);
                 const d = await r.json();
                 if (d.success) {
                     username = d.username; userColor = d.color;
                     localStorage.setItem('chat_username', d.username); localStorage.setItem('chat_color', d.color);
                     authModal.style.display = 'none'; initializeChat(d.color); return;
                 }
-            } catch(e) {}
+            } catch(e) {
+                // Timed out or network error — fall through to login modal
+                connectionStatus.textContent = 'Connecting…';
+                connectionStatus.style.color = '';
+            }
         }
         if (storedUser) document.getElementById('login-username').value = storedUser;
         authModal.style.display = 'flex';
+        connectionStatus.textContent = 'Connecting…';
+        connectionStatus.style.color = '';
     });
 
 
