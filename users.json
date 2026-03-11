@@ -26,7 +26,8 @@
     "passwordHash": "$2a$10$yWQEiGPv0cHLYQRGldc/..mTX605jmU9IQrsqyTSlIRiZ6pgk6oA2",
     "color": "#ff06ff",
     "sessionTokens": [
-      "9169cf0bb6ccfad97148c5a22e46853ec9188bef869ab2b0ca5c013c95ac34e6"
+      "9169cf0bb6ccfad97148c5a22e46853ec9188bef869ab2b0ca5c013c95ac34e6",
+      "77f3dbd287ab0a85c3c7a587c2956752277357a59be65f2bc6b37278824d06a6"
     ]
   }
 }
