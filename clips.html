@@ -420,9 +420,11 @@ function loadTheaterClip(clip) {
   tvid.play().catch(() => {});
   tcTitle.textContent = clip.filename.replace(/\.[^.]+$/, '');
   tcSeek.value = 0;
-  document.getElementById('clips-theater').style.display = '';
-  // Scroll theater into view
-  document.getElementById('clips-theater').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const theaterEl = document.getElementById('clips-theater');
+  const wasHidden = theaterEl.style.display === 'none';
+  theaterEl.style.display = '';
+  // Only scroll into view when first opening the theater, not on auto-advance
+  if (wasHidden) theaterEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── Upload handler ───────────────────────────────────────────────────────

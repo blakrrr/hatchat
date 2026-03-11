@@ -509,9 +509,7 @@ async function loadMessagesFromCloudinary() {
     } catch (e) { console.error('Error loading messages:', e); }
 }
 
-// Call once at startup (non-blocking — server still starts while this resolves)
-loadMessagesFromCloudinary().catch(e => console.error('Boot message load failed:', e));
-loadUsersFromCloudinary().catch(e => console.error('Boot user load failed:', e));
+// Load data before starting — ensures no client ever receives an empty message history
 
 try {
     if (fs.existsSync(USER_COLORS_FILE)) {
@@ -710,7 +708,14 @@ app.get('/clips', (req, res) => res.sendFile(path.join(__dirname, 'clips.html'))
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'settings.html')));
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Await both data loads before accepting connections — this is the fix for
+// clients getting an empty message history on fresh server starts.
+(async () => {
+    try { await loadMessagesFromCloudinary(); } catch (e) { console.error('Boot message load failed:', e); }
+    try { await loadUsersFromCloudinary(); } catch (e) { console.error('Boot user load failed:', e); }
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+})();
 
 // ADMIN: reassign all clips to a given uploader
 // POST /api/admin/reassign  { adminKey, uploader }
