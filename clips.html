@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
-<script src="hatchat-shared.js?v=1.1.0.0"></script>
+<script src="hatchat-shared.js?v=1.0.9.0"></script>
 <style>
   /* body padding-left handles the offset — no extra margin needed on clips-main */
   /* Theater fullscreen: z-index 1000 sits above the panel (z-index 100) */
@@ -19,7 +19,7 @@
 <body class="clips-page">
 
 <header>
-  <div class="logo">hatchat - 1.1.0.0</div>
+  <div class="logo">hatchat - 1.0.9.0</div>
   <nav>
     <ul>
       <li><a href="clips.html">clips</a></li>
@@ -225,52 +225,6 @@ function buildCard(grid, clip, showUploader) {
       });
       info.appendChild(delBtn);
     }
-
-    // ── Likes & Comments ──────────────────────────────────────────────
-    const metaRow = document.createElement('div');
-    metaRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.75rem;';
-
-    const likeBtn = document.createElement('button');
-    likeBtn.style.cssText = 'background:none;border:none;color:#666;cursor:pointer;font-size:0.8rem;padding:0;';
-    likeBtn.title = 'Like';
-
-    const commentCountEl = document.createElement('span');
-    commentCountEl.style.color = '#555';
-
-    // Load meta async
-    (async () => {
-      try {
-        const r = await fetch(`${SERVER}/api/clip-meta/${encodeURIComponent(clip.public_id)}`);
-        const d = await r.json();
-        if (!d.success) return;
-        const { likes, comments } = d.meta;
-        const liked = username && likes.includes(username);
-        likeBtn.textContent = (liked ? '❤️ ' : '🤍 ') + likes.length;
-        likeBtn.classList.toggle('liked', liked);
-        commentCountEl.textContent = comments.length ? `💬 ${comments.length}` : '';
-      } catch(_) { likeBtn.textContent = '🤍 0'; }
-    })();
-
-    likeBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!username) return;
-      try {
-        const r = await fetch(`${SERVER}/api/clip-like`, {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ public_id: clip.public_id, username })
-        });
-        const d = await r.json();
-        if (d.success) {
-          const liked = d.likes.includes(username);
-          likeBtn.textContent = (liked ? '❤️ ' : '🤍 ') + d.likes.length;
-        }
-      } catch(_) {}
-    });
-
-    metaRow.appendChild(likeBtn);
-    metaRow.appendChild(commentCountEl);
-    info.appendChild(metaRow);
-
     card.appendChild(info);
     grid.appendChild(card);
 }
