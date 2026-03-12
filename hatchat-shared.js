@@ -1,9 +1,9 @@
 /**
- * hatchat-shared.js — v1.0.5.0
+ * hatchat-shared.js — v1.0.6.0
  * Shared: zoom (per-page, server-synced), notification bar, prefs helpers.
  */
 
-const HATCHAT_VERSION = '1.0.5.0';
+const HATCHAT_VERSION = '1.0.6.0';
 const SERVER = 'https://averrgy-github-io.onrender.com';
 
 // ── Prefs: load from server on boot, save on change (debounced) ───────────
@@ -200,9 +200,9 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
     const style = document.createElement('style');
     style.textContent = `
         #hc-online-panel {
-            position: fixed; top: 3.5rem; right: 0;
+            position: fixed; top: 3.5rem; left: 0;
             width: 160px; height: calc(100vh - 3.5rem);
-            background: #0d0d0d; border-left: 1px solid #1e1e1e;
+            background: #0d0d0d; border-right: 1px solid #1e1e1e;
             overflow-y: auto; z-index: 100; padding: 0.6rem 0.5rem;
             box-sizing: border-box; font-family: 'DejaVu Sans Mono', monospace;
             font-size: 0.75rem;
@@ -224,20 +224,20 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
             color: #333; font-size: 0.6rem; margin: 0.4rem 0;
             text-align: center;
         }
-        /* push page content left to make room on non-chat pages */
+        /* push page content right to make room for the LEFT panel */
         body.has-online-panel .clips-main,
         body.has-online-panel .main-content {
-            margin-right: 164px;
+            margin-left: 164px;
+            margin-right: 0;
             box-sizing: border-box;
         }
         /* Theater fullscreen: cover everything including the panel */
         .theater-fs {
             z-index: 1000 !important;
         }
-        /* Non-FS theater: ensure it doesn't overlap the panel */
+        /* Non-FS theater: stays within the content column */
         body.has-online-panel .clips-theater:not(.theater-fs) {
-            margin-right: 0;
-            max-width: calc(100% - 0px);
+            max-width: 100%;
         }
     `;
     document.head.appendChild(style);
@@ -331,8 +331,8 @@ window.hcInitOnlinePanel = function(sock) {
         #hc-zoom-val { min-width: 3.5ch; text-align: right; color: #999; font-weight: bold; }
 
         #hc-notif-bar {
-            position: fixed; right: 180px; top: 3.8rem;
-            transform: translateY(-130%);
+            position: fixed; left: 50%; top: 3.8rem;
+            transform: translateX(-50%) translateY(-130%);
             background: #141414; border: 1px solid #2a2a2a;
             border-left: 3px solid #484848; color: #c8c8c8;
             padding: 0.6rem 1.1rem; border-radius: 3px;
@@ -343,13 +343,9 @@ window.hcInitOnlinePanel = function(sock) {
             transition: transform 0.2s ease, opacity 0.2s ease;
             opacity: 0; pointer-events: none;
         }
-        #hc-notif-bar.hc-notif-visible { transform: translateY(0); opacity: 1; }
-        body:not(.chat-page) #hc-notif-bar {
-            right: auto; left: 50%; top: 3.8rem;
-            transform: translateX(-50%) translateY(-130%);
-        }
-        body:not(.chat-page) #hc-notif-bar.hc-notif-visible {
+        #hc-notif-bar.hc-notif-visible {
             transform: translateX(-50%) translateY(0);
+            opacity: 1;
         }
     `;
     document.head.appendChild(style);

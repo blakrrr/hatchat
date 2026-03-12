@@ -9,25 +9,22 @@
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
-<script src="hatchat-shared.js?v=1.0.5.0"></script>
+<script src="hatchat-shared.js?v=1.0.6.0"></script>
 <style>
-  /* Online panel sits fixed on the RIGHT — clips flow left and stop before it */
+  /* Panel is on the LEFT — push clips content right so it doesn't go behind the panel */
   body.has-online-panel .clips-main {
-    margin-right: 164px;
+    margin-left: 164px;
+    margin-right: 0;
     box-sizing: border-box;
   }
-  /* Theater fullscreen: z-index 1000 covers the panel (panel is z-index 100) */
-  /* Panel auto-hides when theater goes fullscreen via JS in the FS block */
-  body.has-online-panel .clips-theater:not(.theater-fs) {
-    /* Non-FS theater stays within the content column */
-    max-width: 100%;
-  }
+  /* Theater fullscreen: z-index 1000 sits above the panel (z-index 100) */
+  /* Panel is hidden/shown via JS in the FS block below */
 </style>
 </head>
 <body class="clips-page">
 
 <header>
-  <div class="logo">hatchat - 1.0.5.0</div>
+  <div class="logo">hatchat - 1.0.6.0</div>
   <nav>
     <ul>
       <li><a href="clips.html">clips</a></li>
