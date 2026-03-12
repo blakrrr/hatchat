@@ -379,6 +379,7 @@ app.post('/api/register', async (req, res) => {
         username, passwordHash,
         color: color || '#FFFFFF',
         sessionTokens: [token],
+        joinedAt: new Date().toISOString(),
     };
 
     // Save immediately and wait — if Cloudinary fails, the account would be lost on Render restart
@@ -494,10 +495,14 @@ app.post('/api/save-prefs', (req, res) => {
 // GET /api/all-users ΓÇö all registered users + online status (for the user panel)
 app.get('/api/all-users', (req, res) => {
     const onlineUsernames = new Set(Object.values(users).map(u => u.username.toLowerCase()));
+    const onlineMap = {};
+    Object.values(users).forEach(u => { onlineMap[u.username.toLowerCase()] = u; });
     const list = Object.values(registeredUsers).map(u => ({
         username: u.username,
         color:    u.color,
         online:   onlineUsernames.has(u.username.toLowerCase()),
+        status:   onlineMap[u.username.toLowerCase()]?.status || '',
+        activity: onlineMap[u.username.toLowerCase()]?.activity || null,
     }));
     res.json({ success: true, users: list });
 });
@@ -613,16 +618,64 @@ io.on('connection', (socket) => {
         io.emit('refresh_all_users');
     });
 
+    // ── Reactions ─────────────────────────────────────────────────────────
+    socket.on('add_reaction', (data) => {
+        const msg = chatMessages.find(m => m.id === data.msgId);
+        if (!msg) return;
+        if (!msg.reactions) msg.reactions = {};
+        if (!msg.reactions[data.emoji]) msg.reactions[data.emoji] = [];
+        const arr = msg.reactions[data.emoji];
+        const idx = arr.indexOf(username);
+        if (idx === -1) arr.push(username); else arr.splice(idx, 1);
+        if (arr.length === 0) delete msg.reactions[data.emoji];
+        saveMessages();
+        io.emit('reaction_update', { msgId: data.msgId, reactions: msg.reactions });
+    });
+
+    // ── Edit message ──────────────────────────────────────────────────────
+    socket.on('edit_message', (data) => {
+        const msg = chatMessages.find(m => m.id === data.msgId);
+        if (!msg || msg.username !== username) return;
+        const ageMins = (Date.now() - new Date(msg.timestamp).getTime()) / 60000;
+        if (ageMins > 15) { socket.emit('edit_error', 'Too old to edit (15 min limit)'); return; }
+        msg.message = data.newText;
+        msg.edited = true;
+        saveMessages();
+        io.emit('message_edited', { msgId: data.msgId, newText: data.newText });
+    });
+
+    // ── Delete message ────────────────────────────────────────────────────
+    socket.on('delete_message', (data) => {
+        const idx = chatMessages.findIndex(m => m.id === data.msgId);
+        if (idx === -1) return;
+        if (chatMessages[idx].username !== username) return;
+        chatMessages.splice(idx, 1);
+        saveMessages();
+        io.emit('message_deleted', { msgId: data.msgId });
+    });
+
+    // ── User status ───────────────────────────────────────────────────────
+    socket.on('set_status', (data) => {
+        if (users[socket.id]) {
+            users[socket.id].status   = (data.status || '').substring(0, 40);
+            users[socket.id].activity = data.activity || null;
+        }
+        io.emit('update_users', { users: Object.values(users), userColors });
+        io.emit('refresh_all_users');
+    });
+
     socket.on('chat_message', (data) => {
+        const msgId = `${username}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
         const messageData = {
+            id: msgId,
             type: 'message',
             username,
             message: data.message,
             timestamp: new Date().toISOString(),
             color: userColors[username],
             image: data.image || null,
-            // ΓöÇΓöÇ Reply support: store whatever the client sent, or null ΓöÇΓöÇ
-            replyTo: data.replyTo || null
+            replyTo: data.replyTo || null,
+            reactions: {}
         };
         chatMessages.push(messageData);
         // Hard cap: keep last 2000 real messages.
@@ -731,7 +784,119 @@ app.get('/api/search', (req, res) => {
     res.json({ success: true, results: results.slice(0, 200) }); // cap at 200
 });
 
-// ── STATIC PAGE ROUTES ────────────────────────────────────────────────────
+// ── CLIP METADATA (likes, comments, descriptions) ────────────────────────
+// Stored in Cloudinary as a raw JSON file, keyed by public_id
+const CLIP_META_PUBLIC_ID = 'hatchat-data/clip_meta';
+let clipMeta = {}; // { [public_id]: { likes: [username], comments: [{id,username,text,ts}], description: '' } }
+
+async function loadClipMeta() {
+    try {
+        const result = await cloudinary.api.resource(CLIP_META_PUBLIC_ID, { resource_type: 'raw' });
+        const resp = await fetch(result.secure_url + '?t=' + Date.now());
+        if (resp.ok) { clipMeta = await resp.json(); return; }
+    } catch (_) {}
+    clipMeta = {};
+}
+
+let _clipMetaTimer = null;
+function saveClipMeta() {
+    clearTimeout(_clipMetaTimer);
+    _clipMetaTimer = setTimeout(async () => {
+        try {
+            await new Promise((resolve, reject) => {
+                const stream = cloudinary.uploader.upload_stream(
+                    { resource_type: 'raw', public_id: CLIP_META_PUBLIC_ID, overwrite: true, invalidate: true },
+                    (err, r) => err ? reject(err) : resolve(r)
+                );
+                stream.end(Buffer.from(JSON.stringify(clipMeta), 'utf8'));
+            });
+        } catch (e) { console.error('Clip meta save error:', e.message); }
+    }, 2000);
+}
+
+function ensureMeta(pid) { if (!clipMeta[pid]) clipMeta[pid] = { likes: [], comments: [], description: '' }; }
+
+// GET /api/clip-meta/:public_id(*)
+app.get('/api/clip-meta/:public_id(*)', (req, res) => {
+    const meta = clipMeta[req.params.public_id] || { likes: [], comments: [], description: '' };
+    res.json({ success: true, meta });
+});
+
+// POST /api/clip-like  { public_id, username }
+app.post('/api/clip-like', (req, res) => {
+    const { public_id, username } = req.body || {};
+    if (!public_id || !username) return res.status(400).json({ success: false });
+    ensureMeta(public_id);
+    const arr = clipMeta[public_id].likes;
+    const idx = arr.indexOf(username);
+    if (idx === -1) arr.push(username); else arr.splice(idx, 1);
+    saveClipMeta();
+    res.json({ success: true, likes: arr });
+});
+
+// POST /api/clip-comment  { public_id, username, text }
+app.post('/api/clip-comment', (req, res) => {
+    const { public_id, username, text } = req.body || {};
+    if (!public_id || !username || !text) return res.status(400).json({ success: false });
+    ensureMeta(public_id);
+    const comment = { id: `${username}_${Date.now()}`, username, text: text.substring(0, 300), ts: new Date().toISOString() };
+    clipMeta[public_id].comments.push(comment);
+    saveClipMeta();
+    io.emit('clip_comment_added', { public_id, comment });
+    res.json({ success: true, comment });
+});
+
+// DELETE /api/clip-comment  { public_id, comment_id, username }
+app.delete('/api/clip-comment', (req, res) => {
+    const { public_id, comment_id, username } = req.body || {};
+    if (!public_id || !comment_id) return res.status(400).json({ success: false });
+    ensureMeta(public_id);
+    const arr = clipMeta[public_id].comments;
+    const idx = arr.findIndex(c => c.id === comment_id && c.username === username);
+    if (idx === -1) return res.status(403).json({ success: false, message: 'Not your comment' });
+    arr.splice(idx, 1);
+    saveClipMeta();
+    res.json({ success: true });
+});
+
+// POST /api/clip-description  { public_id, username, description }
+app.post('/api/clip-description', async (req, res) => {
+    const { public_id, username, description } = req.body || {};
+    if (!public_id || !username) return res.status(400).json({ success: false });
+    // Verify ownership
+    try {
+        const info = await cloudinary.api.resource(public_id, { resource_type: 'video', context: true, tags: true });
+        let owner = 'unknown';
+        if (info.context?.custom?.uploader) owner = info.context.custom.uploader;
+        else if (info.tags) { const t = info.tags.find(t => t.startsWith('uploader:')); if (t) owner = t.replace('uploader:',''); }
+        if (owner.toLowerCase() !== username.toLowerCase()) return res.status(403).json({ success: false, message: 'Not your clip' });
+    } catch (e) { return res.status(500).json({ success: false, message: e.message }); }
+    ensureMeta(public_id);
+    clipMeta[public_id].description = (description || '').substring(0, 200);
+    saveClipMeta();
+    res.json({ success: true });
+});
+
+// ── USER PROFILES ─────────────────────────────────────────────────────────
+app.get('/api/profile/:username', (req, res) => {
+    const key = req.params.username.toLowerCase();
+    const user = registeredUsers[key];
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const onlineNow = new Set(Object.values(users).map(u => u.username.toLowerCase()));
+    // Count clips
+    res.json({
+        success: true,
+        username: user.username,
+        color: user.color,
+        online: onlineNow.has(key),
+        joinedAt: user.joinedAt || null,
+    });
+});
+
+// Store joinedAt on register (patch existing code via save)
+app.post('/api/register', async (req, res) => res.redirect(307, '/api/register')); // no-op guard
+
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'chat.html')));
 app.get('/clips', (req, res) => res.sendFile(path.join(__dirname, 'clips.html')));
@@ -744,6 +909,7 @@ const PORT = process.env.PORT || 3000;
 (async () => {
     try { await loadMessagesFromCloudinary(); } catch (e) { console.error('Boot message load failed:', e); }
     try { await loadUsersFromCloudinary(); } catch (e) { console.error('Boot user load failed:', e); }
+    try { await loadClipMeta(); } catch (e) { console.error('Boot clip meta load failed:', e); }
 
     // One-time cleanup: strip ALL system messages from history.
     // They were being saved by old code and are now pure spam that displaces real messages.

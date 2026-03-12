@@ -1,9 +1,9 @@
 /**
- * hatchat-shared.js — v1.0.9.0
+ * hatchat-shared.js — v1.1.0.0
  * Shared: zoom (per-page, server-synced), notification bar, prefs helpers.
  */
 
-const HATCHAT_VERSION = '1.0.9.0';
+const HATCHAT_VERSION = '1.1.0.0';
 const SERVER = 'https://averrgy-github-io.onrender.com';
 
 // ── Prefs: load from server on boot, save on change (debounced) ───────────

@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
-    <script src="hatchat-shared.js?v=1.0.9.0"></script>
+    <script src="hatchat-shared.js?v=1.1.0.0"></script>
     <style>
         /* ── Search Modal ── */
         #search-modal {
@@ -70,11 +70,108 @@
         .search-empty { padding: 1.5rem; text-align: center; color: #444; font-size: 0.8rem; }
         /* DND dot color */
         .dnd-active .user-dot { background-color: #cf4444 !important; }
+
+        /* ── Reactions ── */
+        .msg-reactions { display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; }
+        .reaction-pill {
+            display:inline-flex; align-items:center; gap:3px;
+            background:#1e1e1e; border:1px solid #333; border-radius:10px;
+            padding:1px 7px; font-size:0.78rem; cursor:pointer; user-select:none;
+            transition: background 0.15s;
+        }
+        .reaction-pill:hover { background:#2a2a2a; }
+        .reaction-pill.mine { border-color:#555; background:#252525; }
+        .reaction-pill .r-count { color:#999; font-size:0.72rem; }
+
+        /* ── Reaction picker ── */
+        .reaction-picker {
+            display:none; position:absolute; z-index:300;
+            background:#141414; border:1px solid #2e2e2e;
+            border-radius:6px; padding:4px 6px;
+            box-shadow:0 4px 16px rgba(0,0,0,0.8);
+            gap:4px; flex-wrap:wrap; max-width:200px;
+        }
+        .reaction-picker.open { display:flex; }
+        .reaction-picker span {
+            font-size:1.1rem; cursor:pointer; padding:3px 4px;
+            border-radius:4px; transition:background 0.1s;
+        }
+        .reaction-picker span:hover { background:#2a2a2a; }
+
+        /* ── Hover actions (edit / delete / react) ── */
+        .message { position:relative; }
+        .msg-actions {
+            display:none; position:absolute; right:0; top:0;
+            background:#141414; border:1px solid #2a2a2a;
+            border-radius:4px; gap:2px; padding:2px 4px;
+            z-index:200;
+        }
+        .message:hover .msg-actions { display:flex; }
+        .msg-action-btn {
+            background:none; border:none; color:#666;
+            cursor:pointer; font-size:0.78rem; padding:2px 5px;
+            border-radius:3px; font-family:'DejaVu Sans Mono',monospace;
+        }
+        .msg-action-btn:hover { color:#ccc; background:#222; }
+
+        /* ── Edit inline ── */
+        .msg-edit-input {
+            background:#1a1a1a; border:1px solid #444; color:inherit;
+            font-family:'DejaVu Sans Mono',monospace; font-size:inherit;
+            padding:2px 6px; border-radius:3px; width:100%;
+            box-sizing:border-box; resize:none; outline:none;
+        }
+        .edited-tag { color:#444; font-size:0.62rem; margin-left:4px; }
+
+        /* ── @mention highlight ── */
+        .mention-me { background:rgba(100,80,200,0.18); border-radius:3px; padding:0 2px; }
+
+        /* ── Profile card ── */
+        #profile-card {
+            display:none; position:fixed; z-index:600;
+            background:#141414; border:1px solid #2e2e2e;
+            border-radius:6px; padding:1rem 1.2rem;
+            min-width:180px; box-shadow:0 6px 24px rgba(0,0,0,0.9);
+            font-family:'DejaVu Sans Mono',monospace; font-size:0.82rem;
+        }
+        #profile-card.open { display:block; }
+        .profile-name { font-size:1rem; font-weight:bold; margin-bottom:0.3rem; }
+        .profile-status { color:#666; font-size:0.75rem; margin-bottom:0.5rem; font-style:italic; }
+        .profile-row { color:#555; font-size:0.72rem; margin:2px 0; }
+        .profile-close { float:right; background:none; border:none; color:#555; cursor:pointer; font-size:0.9rem; }
+
+        /* ── Notification prefs ── */
+        #notif-prefs-panel {
+            display:none; position:fixed; bottom:4rem; right:1rem; z-index:500;
+            background:#141414; border:1px solid #2a2a2a; border-radius:6px;
+            padding:0.8rem 1rem; font-family:'DejaVu Sans Mono',monospace;
+            font-size:0.8rem; min-width:220px;
+            box-shadow:0 4px 16px rgba(0,0,0,0.8);
+        }
+        #notif-prefs-panel.open { display:block; }
+        .notif-pref-row { display:flex; align-items:center; gap:0.5rem; margin:4px 0; color:#888; }
+        .notif-pref-row label { cursor:pointer; }
+
+        /* ── Custom status input ── */
+        #status-input-wrap {
+            display:flex; align-items:center; gap:6px;
+            padding:4px 0 8px; border-bottom:1px solid #1e1e1e; margin-bottom:6px;
+        }
+        #status-input {
+            flex:1; background:#111; border:1px solid #222; color:#aaa;
+            font-family:'DejaVu Sans Mono',monospace; font-size:0.78rem;
+            padding:3px 7px; border-radius:3px; outline:none;
+        }
+        #status-input:focus { border-color:#444; }
+        #status-submit { background:none; border:none; color:#555; cursor:pointer; font-size:0.9rem; }
+        #status-submit:hover { color:#aaa; }
+        .user-status-text { color:#555; font-size:0.68rem; font-style:italic; padding-left:1.2rem; margin-top:-3px; margin-bottom:3px; }
+        .user-activity-icon { font-size:0.7rem; color:#777; margin-right:2px; }
     </style>
 </head>
 <body class="chat-page">
     <header>
-        <div class="logo">hatchat - 1.0.9.0</div>
+        <div class="logo">hatchat - 1.1.0.0</div>
         <nav><ul>
             <li><a href="clips.html">clips</a></li>
             <li><a href="index.html">homepage</a></li>
@@ -92,6 +189,10 @@
         <div class="user-list">
             <div class="dnd-toggle-container">
                 <label><input type="checkbox" id="dnd-toggle"> Do Not Disturb</label>
+            </div>
+            <div id="status-input-wrap">
+                <input id="status-input" maxlength="40" placeholder="set a status…">
+                <button id="status-submit" title="Set status">✓</button>
             </div>
             <h3>fellow hattingtons</h3>
             <div class="online-users" id="online-users"></div>
@@ -136,6 +237,24 @@
                 <button class="voice-ctrl-btn" id="voice-deaf-btn">🔇 deafen</button>
             </div>
         </div>
+    </div>
+
+    <!-- Profile Card -->
+    <div id="profile-card">
+        <button class="profile-close" id="profile-close">✕</button>
+        <div class="profile-name" id="profile-name"></div>
+        <div class="profile-status" id="profile-card-status"></div>
+        <div class="profile-row" id="profile-online"></div>
+        <div class="profile-row" id="profile-joined"></div>
+    </div>
+
+    <!-- Notification Prefs -->
+    <div id="notif-prefs-panel">
+        <div style="color:#aaa;margin-bottom:6px;font-size:0.82rem">notification settings</div>
+        <div class="notif-pref-row"><input type="checkbox" id="np-all" checked><label for="np-all">all messages</label></div>
+        <div class="notif-pref-row"><input type="checkbox" id="np-mentions"><label for="np-mentions">@mentions only</label></div>
+        <div class="notif-pref-row"><input type="checkbox" id="np-sound"><label for="np-sound">sound</label></div>
+        <div style="margin-top:6px;color:#444;font-size:0.7rem">applies when tab is not focused</div>
     </div>
 
     <!-- Search Modal -->
@@ -207,6 +326,9 @@
     let currentPage = 1, isLoading = false;
     let selectedImage = null, isUploading = false, isDndEnabled = false;
     let userColors = {}, replyingTo = null;
+    const REACTION_EMOJIS = ['👍','💀','🔥','😂','😭','❤️','💯','👀','😤','🤡'];
+    let notifPrefs = JSON.parse(localStorage.getItem('hc_notif_prefs') || '{"all":true,"mentions":false,"sound":true}');
+    let activeReactionPicker = null;
 
     const chatMessagesEl   = document.getElementById('chat-messages');
     const chatForm         = document.getElementById('chat-form');
@@ -230,8 +352,16 @@
 
     function playNotifSound() {
         if (isDndEnabled) return;
-        if (document.hasFocus()) return; // only play when tab not focused
+        if (!notifPrefs.sound) return;
         try { notifSound.currentTime = 0; notifSound.play().catch(()=>{}); } catch(_) {}
+    }
+
+    function shouldNotify(msg) {
+        if (isDndEnabled) return false;
+        if (document.hasFocus()) return false;
+        if (notifPrefs.all) return true;
+        if (notifPrefs.mentions && msg && msg.includes('@' + username)) return true;
+        return false;
     }
 
     const emojiMap = {
@@ -256,6 +386,32 @@
         replyPreviewText.textContent = '';
     }
     replyCancelBtn.addEventListener('click', clearReply);
+
+    // ── Custom status ──────────────────────────────────────────────────────
+    document.getElementById('status-submit').addEventListener('click', () => {
+        const val = document.getElementById('status-input').value.trim();
+        if (socket) socket.emit('set_status', { status: val, activity: 'chat' });
+    });
+    document.getElementById('status-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('status-submit').click();
+    });
+
+    // ── Notification prefs ─────────────────────────────────────────────────
+    function initNotifPrefs() {
+        const panel = document.getElementById('notif-prefs-panel');
+        const npAll  = document.getElementById('np-all');
+        const npMent = document.getElementById('np-mentions');
+        const npSnd  = document.getElementById('np-sound');
+        npAll.checked  = notifPrefs.all !== false;
+        npMent.checked = !!notifPrefs.mentions;
+        npSnd.checked  = notifPrefs.sound !== false;
+        function save() {
+            notifPrefs = { all: npAll.checked, mentions: npMent.checked, sound: npSnd.checked };
+            localStorage.setItem('hc_notif_prefs', JSON.stringify(notifPrefs));
+        }
+        npAll.addEventListener('change', save); npMent.addEventListener('change', save); npSnd.addEventListener('change', save);
+    }
+    initNotifPrefs();
 
     // ── DND ──────────────────────────────────────────────────────────────
     // Restore persisted DND state
@@ -438,13 +594,13 @@
         socket.on('disconnect', () => { connectionStatus.textContent = 'Disconnected'; connectionStatus.style.color = '#ff6b6b'; });
 
         socket.on('chat_message', (data) => {
-            displayMessage(data.username, data.message, data.timestamp, data.color, data.image, data.replyTo);
+            displayMessage(data.username, data.message, data.timestamp, data.color, data.image, data.replyTo, data.id);
             if (data.username !== username) {
-                if (!isDndEnabled) {
-                    const preview = data.message ? data.message.substring(0, 50) : '[image]';
+                const preview = data.message ? data.message.substring(0, 50) : '[image]';
+                const isMention = data.message && data.message.includes('@' + username);
+                if (shouldNotify(data.message) || isMention) {
                     if (window.hcNotify) window.hcNotify(`💬 ${data.username}: ${preview}`);
                     playNotifSound();
-                    // Ping other tabs (clips, settings) so they play sound + show popup too
                     if (window.hcTriggerCrossPageSound) window.hcTriggerCrossPageSound(`💬 ${data.username}: ${preview}`);
                 }
             }
@@ -461,7 +617,7 @@
             const chronological = [...data.messages].reverse();
             chronological.forEach((msg) => {
                 if (msg.type === 'system') { msgs.push(createSystemMessageElement(msg.message, msg.timestamp)); return; }
-                msgs.push(createMessageElement(msg.username, msg.message, msg.timestamp, false, msg.color || userColors[msg.username], msg.image, msg.replyTo));
+                msgs.push(createMessageElement(msg.username, msg.message, msg.timestamp, false, msg.color || userColors[msg.username], msg.image, msg.replyTo, msg.id, msg.reactions||{}));
             });
             recalcContinuations(msgs);
             const frag = document.createDocumentFragment();
@@ -484,6 +640,39 @@
         });
         // Hard reload when server tells us to (profile update or new clip)
         socket.on('force_reload', () => { setTimeout(() => location.reload(), 800); });
+
+        // ── Reactions ──────────────────────────────────────────────────
+        socket.on('reaction_update', ({ msgId, reactions }) => {
+            const el = document.querySelector(`.message[data-msgid="${msgId}"]`);
+            if (!el) return;
+            renderReactions(el, msgId, reactions);
+        });
+
+        // ── Edit / Delete ──────────────────────────────────────────────
+        socket.on('message_edited', ({ msgId, newText }) => {
+            const el = document.querySelector(`.message[data-msgid="${msgId}"]`);
+            if (!el) return;
+            const content = el.querySelector('.message-content');
+            if (!content) return;
+            // Clear and rewrite text, preserve reply thread if any
+            const thread = content.querySelector('.reply-thread');
+            const target = thread ? thread.querySelector('.reply-body') : content;
+            // Remove text nodes only
+            Array.from(target.childNodes).forEach(n => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
+            target.insertBefore(document.createTextNode(newText), target.firstChild);
+            if (!el.querySelector('.edited-tag')) {
+                const tag = document.createElement('span'); tag.className='edited-tag'; tag.textContent='(edited)';
+                content.appendChild(tag);
+            }
+        });
+
+        socket.on('message_deleted', ({ msgId }) => {
+            const el = document.querySelector(`.message[data-msgid="${msgId}"]`);
+            if (el) {
+                el.innerHTML = '<div class="message-content" style="color:#333;font-style:italic;font-size:0.8rem">message deleted</div>';
+                el.classList.add('deleted-message');
+            }
+        });
 
         dndToggle.addEventListener('change', () => {
             isDndEnabled = dndToggle.checked;
@@ -516,10 +705,6 @@
         });
     }
 
-    // ── Users panel ───────────────────────────────────────────────────────
-    async function loadAllUsers() {
-        try { const r = await fetch(`${SERVER}/api/all-users`); const d = await r.json(); if (d.success) renderAllUsers(d.users); } catch(e) {}
-    }
     function renderAllUsers(all) {
         onlineUsersEl.innerHTML = '';
         const online = all.filter(u => u.online), offline = all.filter(u => !u.online);
@@ -530,7 +715,19 @@
             if (isDndEnabled && u.username === username) dot.style.backgroundColor = '#cf4444';
             const label = document.createElement('span');
             label.textContent = u.username; label.style.color = u.color || userColors[u.username] || '#e0e0e0';
+            label.style.cursor = 'pointer';
+            label.addEventListener('click', () => showProfileCard(u));
             item.appendChild(dot); item.appendChild(label); onlineUsersEl.appendChild(item);
+            if (u.status) {
+                const st = document.createElement('div'); st.className = 'user-status-text';
+                st.textContent = u.status; onlineUsersEl.appendChild(st);
+            }
+            if (u.activity) {
+                const act = document.createElement('div'); act.className = 'user-status-text';
+                const icons = { clips:'🎬', settings:'⚙️', chat:'💬' };
+                act.textContent = (icons[u.activity]||'📍') + ' on ' + u.activity;
+                onlineUsersEl.appendChild(act);
+            }
         });
         if (offline.length) {
             const div = document.createElement('div'); div.className = 'offline-divider'; div.textContent = '── offline ──'; onlineUsersEl.appendChild(div);
@@ -538,10 +735,33 @@
                 const item = document.createElement('div'); item.className = 'user-item user-offline';
                 const dot = document.createElement('span'); dot.className = 'user-dot user-dot-offline';
                 const label = document.createElement('span'); label.textContent = u.username; label.style.color = '#555';
+                label.style.cursor = 'pointer';
+                label.addEventListener('click', () => showProfileCard(u));
                 item.appendChild(dot); item.appendChild(label); onlineUsersEl.appendChild(item);
             });
         }
     }
+
+    async function showProfileCard(u) {
+        const card = document.getElementById('profile-card');
+        document.getElementById('profile-name').textContent = u.username;
+        document.getElementById('profile-name').style.color = u.color || '#e0e0e0';
+        document.getElementById('profile-card-status').textContent = u.status || '';
+        document.getElementById('profile-online').textContent = u.online ? '🟢 online' : '⚫ offline';
+        try {
+            const r = await fetch(`${SERVER}/api/profile/${encodeURIComponent(u.username)}`);
+            const d = await r.json();
+            if (d.success && d.joinedAt) {
+                const joined = new Date(d.joinedAt);
+                document.getElementById('profile-joined').textContent = 'joined ' + joined.toLocaleDateString([], {month:'short',year:'numeric'});
+            } else { document.getElementById('profile-joined').textContent = ''; }
+        } catch(_) { document.getElementById('profile-joined').textContent = ''; }
+        card.classList.add('open');
+        card.style.top = '6rem'; card.style.left = '170px';
+    }
+    document.getElementById('profile-close').addEventListener('click', () => {
+        document.getElementById('profile-card').classList.remove('open');
+    });
 
 
     // ── Message helpers ───────────────────────────────────────────────────
@@ -564,12 +784,13 @@
         socket.emit('load_messages', { page });
     }
 
-    function createMessageElement(sender, message, timestamp, isContinuation=false, color, image=null, replyTo=null) {
+    function createMessageElement(sender, message, timestamp, isContinuation=false, color, image=null, replyTo=null, msgId=null, reactions={}) {
         const div = document.createElement('div');
         div.className = 'message';
         if (isContinuation) div.classList.add('continued-message');
         if (replyTo) div.classList.add('is-reply');
         if (timestamp) div.setAttribute('data-ts', new Date(timestamp).getTime());
+        if (msgId) div.setAttribute('data-msgid', msgId);
         const msgColor = color || userColors[sender] || null;
         const usernameArea = document.createElement('div'); usernameArea.className = 'username-area';
         const senderEl = document.createElement('span'); senderEl.className = 'message-sender';
@@ -578,9 +799,42 @@
         senderEl.addEventListener('click', e => { e.stopPropagation(); setReply({ username: sender, message: message||'', color: msgColor }); });
         const sep = document.createElement('span'); sep.className = 'message-separator'; sep.textContent = ' ~ ';
         usernameArea.appendChild(senderEl); usernameArea.appendChild(sep);
+
+        // ── Hover actions ──
+        const actions = document.createElement('div'); actions.className = 'msg-actions';
+        const reactBtn = document.createElement('button'); reactBtn.className = 'msg-action-btn'; reactBtn.title='React'; reactBtn.textContent='😄';
+        reactBtn.addEventListener('click', e => { e.stopPropagation(); toggleReactionPicker(div, msgId, reactBtn); });
+        const replyBtn = document.createElement('button'); replyBtn.className = 'msg-action-btn'; replyBtn.title='Reply'; replyBtn.textContent='↩';
+        replyBtn.addEventListener('click', e => { e.stopPropagation(); setReply({ username: sender, message: message||'', color: msgColor }); });
+        actions.appendChild(reactBtn);
+        actions.appendChild(replyBtn);
+        if (sender === username && msgId) {
+            const editBtn = document.createElement('button'); editBtn.className='msg-action-btn'; editBtn.title='Edit'; editBtn.textContent='✏️';
+            editBtn.addEventListener('click', e => { e.stopPropagation(); startEdit(div, msgId, message||''); });
+            const delBtn = document.createElement('button'); delBtn.className='msg-action-btn'; delBtn.title='Delete'; delBtn.textContent='🗑';
+            delBtn.addEventListener('click', e => { e.stopPropagation(); if (confirm('Delete this message?')) socket.emit('delete_message', { msgId }); });
+            actions.appendChild(editBtn); actions.appendChild(delBtn);
+        }
+        div.appendChild(actions);
+
         const content = document.createElement('div'); content.className = 'message-content';
         if (msgColor) content.style.color = msgColor; content.style.cursor = 'pointer'; content.title = 'Click to reply';
         content.addEventListener('click', () => setReply({ username: sender, message: message||'', color: msgColor }));
+
+        function highlightMentions(text) {
+            if (!text) return document.createTextNode('');
+            const parts = text.split(/(@\w+)/g);
+            const frag = document.createDocumentFragment();
+            parts.forEach(p => {
+                if (p.startsWith('@') && p.length > 1) {
+                    const span = document.createElement('span');
+                    span.className = p.toLowerCase() === '@' + username.toLowerCase() ? 'mention-me' : '';
+                    span.textContent = p; frag.appendChild(span);
+                } else { frag.appendChild(document.createTextNode(p)); }
+            });
+            return frag;
+        }
+
         if (replyTo) {
             const replyLineColor = replyTo.color || userColors[replyTo.username] || '#555';
             const thread = document.createElement('div'); thread.className = 'reply-thread'; thread.style.setProperty('--thread-color', replyLineColor);
@@ -591,15 +845,69 @@
             refLine.appendChild(refAuthor); refLine.appendChild(refText);
             const replyBody = document.createElement('div'); replyBody.className = 'reply-body';
             if (msgColor) replyBody.style.color = msgColor;
-            if (message) replyBody.appendChild(document.createTextNode(message));
+            if (message) replyBody.appendChild(highlightMentions(message));
             if (image) { const img = makeImg(image); if (message) replyBody.appendChild(document.createElement('br')); replyBody.appendChild(img); }
             thread.appendChild(refLine); thread.appendChild(replyBody); content.appendChild(thread);
         } else {
-            if (message) content.appendChild(document.createTextNode(message));
+            if (message) content.appendChild(highlightMentions(message));
             if (image) { const img = makeImg(image); if (message) content.appendChild(document.createElement('br')); content.appendChild(img); }
         }
         div.appendChild(usernameArea); div.appendChild(content);
+
+        // ── Reactions row ──
+        const reactRow = document.createElement('div'); reactRow.className = 'msg-reactions';
+        div.appendChild(reactRow);
+        if (reactions && Object.keys(reactions).length) renderReactions(div, msgId, reactions);
+
         return div;
+    }
+
+    function renderReactions(msgEl, msgId, reactions) {
+        const row = msgEl.querySelector('.msg-reactions');
+        if (!row) return;
+        row.innerHTML = '';
+        Object.entries(reactions || {}).forEach(([emoji, users]) => {
+            if (!users.length) return;
+            const pill = document.createElement('span'); pill.className = 'reaction-pill';
+            if (users.includes(username)) pill.classList.add('mine');
+            pill.innerHTML = `${emoji} <span class="r-count">${users.length}</span>`;
+            pill.title = users.join(', ');
+            pill.addEventListener('click', () => socket.emit('add_reaction', { msgId, emoji }));
+            row.appendChild(pill);
+        });
+    }
+
+    function toggleReactionPicker(msgEl, msgId, anchor) {
+        if (activeReactionPicker) { activeReactionPicker.remove(); activeReactionPicker = null; if (activeReactionPicker === msgEl._picker) return; }
+        const picker = document.createElement('div'); picker.className = 'reaction-picker open';
+        REACTION_EMOJIS.forEach(e => {
+            const sp = document.createElement('span'); sp.textContent = e;
+            sp.addEventListener('click', () => { socket.emit('add_reaction', { msgId, emoji: e }); picker.remove(); activeReactionPicker = null; });
+            picker.appendChild(sp);
+        });
+        document.addEventListener('click', function close(ev) { if (!picker.contains(ev.target)) { picker.remove(); activeReactionPicker = null; document.removeEventListener('click', close); } }, { once: false });
+        anchor.parentNode.insertBefore(picker, anchor.nextSibling);
+        activeReactionPicker = picker;
+    }
+
+    function startEdit(msgEl, msgId, currentText) {
+        const content = msgEl.querySelector('.message-content');
+        if (!content) return;
+        const original = content.innerHTML;
+        content.innerHTML = '';
+        const textarea = document.createElement('textarea'); textarea.className = 'msg-edit-input';
+        textarea.value = currentText; textarea.rows = 2; textarea.style.width='100%';
+        const saveBtn = document.createElement('button'); saveBtn.className = 'msg-action-btn'; saveBtn.textContent = 'save'; saveBtn.style.marginTop='3px';
+        const cancelBtn = document.createElement('button'); cancelBtn.className = 'msg-action-btn'; cancelBtn.textContent = 'cancel'; cancelBtn.style.marginTop='3px';
+        saveBtn.addEventListener('click', () => {
+            const t = textarea.value.trim();
+            if (!t) return;
+            socket.emit('edit_message', { msgId, newText: t });
+        });
+        cancelBtn.addEventListener('click', () => { content.innerHTML = original; });
+        textarea.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveBtn.click(); } if (e.key === 'Escape') cancelBtn.click(); });
+        content.appendChild(textarea); content.appendChild(saveBtn); content.appendChild(cancelBtn);
+        textarea.focus();
     }
 
     function makeImg(src) {
@@ -621,12 +929,12 @@
         }
         return div;
     }
-    function displayMessage(sender, message, timestamp, color, image=null, replyTo=null) {
+    function displayMessage(sender, message, timestamp, color, image=null, replyTo=null, msgId=null, reactions={}) {
         const allMsgs = chatMessagesEl.querySelectorAll('.message'); let lastDOMSender = null;
         if (allMsgs.length) { const sEl = allMsgs[allMsgs.length-1].querySelector('.message-sender'); if (sEl) lastDOMSender = sEl.getAttribute('data-sender'); }
         const lastChild = chatMessagesEl.lastElementChild;
         const isCont = !replyTo && !(lastChild && lastChild.classList.contains('system-message')) && lastDOMSender === sender;
-        const el = createMessageElement(sender, message, timestamp, isCont, color, image, replyTo);
+        const el = createMessageElement(sender, message, timestamp, isCont, color, image, replyTo, msgId, reactions);
         chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
     function displaySystemMessage(msg, timestamp) { const el = createSystemMessageElement(msg, timestamp); chatMessagesEl.appendChild(el); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; }
