@@ -1,9 +1,9 @@
 /**
- * hatchat-shared.js — v1.0.8.0
+ * hatchat-shared.js — v1.0.9.0
  * Shared: zoom (per-page, server-synced), notification bar, prefs helpers.
  */
 
-const HATCHAT_VERSION = '1.0.8.0';
+const HATCHAT_VERSION = '1.0.9.0';
 const SERVER = 'https://averrgy-github-io.onrender.com';
 
 // ── Prefs: load from server on boot, save on change (debounced) ───────────
@@ -202,27 +202,26 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
         #hc-online-panel {
             position: fixed; top: 3.5rem; left: 0;
             width: 160px; height: calc(100vh - 3.5rem);
-            background: #0d0d0d; border-right: 1px solid #1e1e1e;
-            overflow-y: auto; z-index: 100; padding: 0.6rem 0.5rem;
+            background: #1a1a1a; border-right: 1px solid #333;
+            overflow-y: auto; z-index: 100; padding: 1rem;
             box-sizing: border-box; font-family: 'DejaVu Sans Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.95rem;
         }
         #hc-online-panel h4 {
-            color: #555; font-size: 0.65rem; text-transform: uppercase;
-            letter-spacing: 0.05em; margin: 0 0 0.5rem 0.2rem;
+            color: #e0e0e0; font-size: 1rem; text-transform: lowercase;
+            letter-spacing: 0; margin: 0 0 0.5rem 0; font-weight: bold;
         }
         #hc-online-panel .user-item {
-            display: flex; align-items: center; padding: 0.18rem 0.2rem;
-            gap: 0.35rem;
+            display: flex; align-items: center; margin-bottom: 5px;
         }
         #hc-online-panel .user-dot {
-            width: 7px; height: 7px; border-radius: 50%;
-            background: #4CAF50; flex-shrink: 0;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #4CAF50; flex-shrink: 0; margin-right: 0.5rem;
         }
-        #hc-online-panel .user-dot-offline { background: #333; }
+        #hc-online-panel .user-dot-offline { background: #3a3a3a; }
         #hc-online-panel .offline-divider {
-            color: #333; font-size: 0.6rem; margin: 0.4rem 0;
-            text-align: center;
+            font-size: 0.62rem; color: #333; text-align: center;
+            padding: 0.5rem 0 0.3rem; letter-spacing: 0.04em;
         }
         /* push ALL non-chat page content right so nothing hides behind the left panel,
            and down so it clears the fixed header */
@@ -260,7 +259,7 @@ const SERVER = 'https://averrgy-github-io.onrender.com';
 window.hcInitOnlinePanel = function(sock) {
     const panel = document.createElement('div');
     panel.id = 'hc-online-panel';
-    panel.innerHTML = '<h4>hattingtons</h4><div id="hc-online-list"></div>';
+    panel.innerHTML = '<h4>fellow hattingtons</h4><div id="hc-online-list"></div>';
     document.body.appendChild(panel);
     document.body.classList.add('has-online-panel');
 
@@ -333,16 +332,17 @@ window.hcInitOnlinePanel = function(sock) {
     style.textContent = `
         #hc-zoom-wrap {
             display: inline-flex; align-items: center;
-            gap: 6px; margin-left: 1rem;
-            font-size: 0.75rem; color: #888; vertical-align: middle;
+            gap: 8px; margin-left: 1rem;
+            font-size: 0.95rem; color: #888; vertical-align: middle;
+            font-family: 'DejaVu Sans Mono', monospace;
         }
         #hc-zoom-wrap.hc-zoom-standalone {
-            display: flex; padding: 0.3rem 1rem;
-            background: #0a0a0a; border-bottom: 1px solid #1e1e1e;
+            display: flex; padding: 0.4rem 1rem;
+            background: #1a1a1a; border-bottom: 1px solid #333;
         }
-        .hc-zoom-label { user-select: none; color: #666; }
+        .hc-zoom-label { user-select: none; color: #666; font-family: 'DejaVu Sans Mono', monospace; }
         #hc-zoom-slider { width: 80px; accent-color: #555; cursor: pointer; }
-        #hc-zoom-val { min-width: 3.5ch; text-align: right; color: #999; font-weight: bold; }
+        #hc-zoom-val { min-width: 3.5ch; text-align: right; color: #999; font-weight: bold; font-family: 'DejaVu Sans Mono', monospace; }
 
         #hc-notif-bar {
             position: fixed; left: 50%; top: 3.8rem;
